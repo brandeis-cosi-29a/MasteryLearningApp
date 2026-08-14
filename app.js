@@ -51,7 +51,7 @@ let s3="";
 if (process.env.UPLOAD_TO == "AWS") {
   const aws_config = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    accessKeyId: process.env.AWS_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     region: process.env.AWS_REGION,
   };
   aws.config.update(aws_config);
