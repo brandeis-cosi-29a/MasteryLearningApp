@@ -3410,10 +3410,10 @@ const addImageFilePath = (req,res,next) => {
           +req.user._id+"/"
           +req.params.probId+"/"   
           +uniqueSuffix+"_";
-        req.urlpath = 
-          "https://" + 
+        req.urlpath =
+          "https://" +
           process.env.AWS_BUCKET_NAME +
-          ".s3.us-east-2.amazonaws.com/"+
+          ".s3." + process.env.AWS_REGION + ".amazonaws.com/"+
           req.filepath;
       } else {
         req.filepath=
