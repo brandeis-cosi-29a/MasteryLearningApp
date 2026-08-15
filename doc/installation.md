@@ -22,6 +22,24 @@ UPLOAD_TO = "LOCAL" # "LOCAL" or "AWS"
 ```
 the administrator has special privileges, including being able to add or remove instructors and to see all courses on the app.
 
+### Optional: upload size limits
+
+Uploads are capped per file. Both caps have defaults, so you only need these variables if you
+want to change them, and either can be set on a deployed instance without a code change.
+
+| variable | default | applies to |
+|---|---|---|
+| `MAX_UPLOAD_MB` | 25 | student answer photos |
+| `MAX_STAFF_UPLOAD_MB` | 1 | roster and grade csv files, uploaded problem files |
+
+A value that is not a positive number is ignored — the app logs a warning and uses the default,
+rather than letting a typo become the limit. A file over the cap is rejected with an HTTP 413 and
+an error page naming the limit; nothing is written to the database or to S3, so a rejected
+re-upload leaves a student's existing answer image untouched.
+
+The 25MB default was chosen against real data: the largest student answer photo on the Brandeis
+deployment was 19.6MB and 99% were under 4MB.
+
 ## Setting up Google OAuth credentials
 
 Signing in with Google is the **only** way to log into MLA — there is no username/password
