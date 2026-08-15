@@ -37,6 +37,18 @@ const ejs = require('ejs'); // to render ejs templates
 
 require("dotenv").config();
 
+// The session secret signs the session cookie, so it must not be a value that
+// anyone can read out of this repository. Fail loudly at startup rather than
+// falling back to a default: a silent fallback would look like a working
+// deployment while leaving every session signed with a publicly known key.
+if (!process.env.SESSION_SECRET) {
+  console.error(
+    "FATAL: SESSION_SECRET is not set. Generate one with `openssl rand -base64 32` " +
+    "and add it to your .env file (or to the environment of your host)."
+  );
+  process.exit(1);
+}
+
 /* ***********************************************
 This section sets up the AWS S3 storage and the local storage for file uploads.
  *********************************************** */
@@ -225,7 +237,7 @@ app.use(cors);
 // this is used to allow for session variables, which are used for authentication
 app.use(session(
   {
-    secret: "zzbbyanana",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {maxAge: 24 * 60 * 60 * 1000}, // allow login for one day...
