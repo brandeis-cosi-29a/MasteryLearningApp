@@ -3910,9 +3910,11 @@ app.post("/removeTAs/:courseId", authorize, isOwner,
     } else if (typeof req.body.ta == "string") {
       await CourseMember.deleteOne({courseId: req.params.courseId, studentId: req.body.ta});
     } else {
-      req.body.ta.forEach(async (x) => {
+      // for..of, not forEach: forEach would not await these deletes, so the
+      // redirect below could render the TA list before they had happened
+      for (const x of req.body.ta) {
         await CourseMember.deleteOne({courseId: req.params.courseId, studentId: x});
-      });
+      }
     }
 
     res.redirect("/showTAs/" + req.params.courseId);
@@ -4447,23 +4449,33 @@ app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess,
     // next we use the expiredReviews from the problem object
     // to update the numReviews and pendingReviewers fields of the answers
 
-    expiredReviews.forEach(async function (x) {
+    // NB: this is a for..of and not a forEach, because forEach ignores the
+    // promise an async callback returns -- the awaits below would not be
+    // awaited by this route, and a rejection would take the process down
+    // rather than reaching the catch at the bottom of this handler.
+    for (const x of expiredReviews) {
       // remove the reviewerId from the list of pendingReviewers
       // and decrement the optimistic numReview field
       // pendingReviews has form x = {answerId,reviewerId,timeSent}
 
       let tempAnswer = await Answer.findOne({_id: x.answerId});
+      // the answer may be gone: uploadAnswerPhoto deletes and recreates the
+      // answer when a student replaces their photo, which leaves the pending
+      // review pointing at an _id that no longer exists
+      if (!tempAnswer) {
+        continue;
+      }
       let expiredReviewers =  tempAnswer.pendingReviewers.filter((r) => {
-        return (r.equals(x.reviewerId))     
+        return (r.equals(x.reviewerId))
       });
-      // this will update the answer by removing the 
+      // this will update the answer by removing the
       // expiredReviewers from the pendingReviewer using $pullAll
 
       await Answer.findByIdAndUpdate(tempAnswer._id,
         {$inc:{numReviews:-expiredReviewers.length},
          $pullAll:{pendingReviewers:expiredReviewers}})
 
-    });
+    }
 
     const localinfo = JSON.stringify(res.locals,null,5);
     res.locals.localinfo = localinfo;
