@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 const ObjectId = mongoose.Schema.Types.ObjectId;
 
 var answerSchema = Schema( {
-  studentId: {type:ObjectId, ref:'User'},
+  studentId: {type:ObjectId,index:true, ref:'User'},
   courseId: {type:ObjectId,index:true},
   psetId: {type:ObjectId, ref:'ProblemSet'},
   //psetProbId:{type:ObjectId,index:true}, // need to update this when
