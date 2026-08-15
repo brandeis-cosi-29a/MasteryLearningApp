@@ -110,14 +110,68 @@ const storageLocal = multer.diskStorage({
   }
 })
 
-const upload = 
+/*
+Upload size limits.  Without these multer accepts a file of any size, so a
+single request can run up an unbounded S3 bill (answer photos) or exhaust the
+instance's memory (the memoryStorage uploads below buffer the whole file in RAM).
+
+Both limits are per file and both are tunable from the environment so they can be
+adjusted in Render without a deploy.  Neither is load-bearing: leave the variable
+unset and the default applies, and a value that isn't a positive number is
+ignored with a warning rather than being allowed to become the limit.
+
+MAX_UPLOAD_MB (default 25) is the student answer photo.  For reference, the
+largest of the 8779 answer images in the August 2026 backup was 19.57MB -- a raw
+.dng off a phone camera -- and 99% of them were under 4MB, so the default rejects
+nothing students have historically managed to upload.
+
+MAX_STAFF_UPLOAD_MB (default 1) covers the csv rosters, csv grade sheets and
+problem text files, all of which are a few hundred bytes in practice.  1MB per
+file keeps the worst case for uploadProblems (maxCount 100) around 100MB of
+buffered text.
+*/
+const megabyteEnv = (name, defaultMB) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") {
+    return defaultMB * 1024 * 1024;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(
+      `${name}="${raw}" is not a positive number, using ${defaultMB}MB instead`);
+    return defaultMB * 1024 * 1024;
+  }
+  return Math.round(parsed * 1024 * 1024);
+};
+
+const ANSWER_PHOTO_SIZE_LIMIT = megabyteEnv("MAX_UPLOAD_MB", 25);
+const STAFF_FILE_SIZE_LIMIT = megabyteEnv("MAX_STAFF_UPLOAD_MB", 1);
+
+const upload =
   (process.env.UPLOAD_TO=='AWS')?
-    multer({ storage: storageAWS })
+    multer({ storage: storageAWS, limits: {fileSize: ANSWER_PHOTO_SIZE_LIMIT} })
     :
-    multer({storage: storageLocal});
+    multer({storage: storageLocal, limits: {fileSize: ANSWER_PHOTO_SIZE_LIMIT}});
 
 const memoryStorage = multer.memoryStorage()
-const memoryUpload = multer({ storage: memoryStorage })
+const memoryUpload =
+  multer({ storage: memoryStorage, limits: {fileSize: STAFF_FILE_SIZE_LIMIT} })
+
+/*
+multer signals a rejected upload with a MulterError, which the error handler at
+the bottom of this file would otherwise report as a 500 with no hint that the
+file was simply too big.  This turns it into a 413 with a message the student
+can act on.  Use it directly after a multer middleware.
+*/
+const handleUploadError = (limit) => (err, req, res, next) => {
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    err.status = 413;
+    const limitMB = Math.round(10*limit/(1024*1024))/10;
+    err.message =
+      `That file is too large.  The limit is ${limitMB}MB per file.`;
+  }
+  next(err);
+};
 
 /*
  here is code we can use to delete an uploaded file
@@ -825,6 +879,7 @@ const updateCourseMembers = async (sectionDocuments) => {
 app.post("/uploadRoster/:courseId", 
   authorize, hasStaffAccess,
   memoryUpload.single('sections'),
+  handleUploadError(STAFF_FILE_SIZE_LIMIT),
  async (req, res, next) => {
 
     const courseId = req.params.courseId;
@@ -1625,6 +1680,7 @@ app.post("/uploadProblems/:courseId/:psetId",
     [{name:"problems",maxCount:100},
      {name:"skill",maxCount:1},
     ]),
+  handleUploadError(STAFF_FILE_SIZE_LIMIT),
   async (req, res, next) => {
   try {
     const psetId = req.params.psetId;
@@ -2067,6 +2123,7 @@ const transform_from_gradescope = (row) => {
 
 app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
   memoryUpload.single('grades'),
+  handleUploadError(STAFF_FILE_SIZE_LIMIT),
  async (req, res, next) => {
   try{
 
@@ -3456,6 +3513,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
           authorize, hasCourseAccess,
           addImageFilePath,
           upload.single('picture'),
+          handleUploadError(ANSWER_PHOTO_SIZE_LIMIT),
     async (req, res, next) => {
       try {
 
