@@ -47,13 +47,16 @@
       <hr>
       
 
-    <% if (course.courseType=="mla1" ) {%>
-      <hr>
-      <h3>Plagiarism detection:on</h3>
-        <a href="/downloadAnswers/<%= courseId%>/<%= problem.id %>">
-          download answers to check for plagiarism</a>
-        <br>
-    <% } %>
+<%
+  /*
+  The "download answers to check for plagiarism" link used to appear here on
+  mla1 courses.  It pointed at /downloadAnswers, which leaves its output in
+  private/ on the server rather than sending it to the browser, so it gives
+  the person who clicks it nothing on a host with an ephemeral disk and no
+  shell.  The route is still registered; put the link back when it returns
+  the bundle to the browser.
+  */
+%>
 
 
 
