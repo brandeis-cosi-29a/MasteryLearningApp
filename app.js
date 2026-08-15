@@ -414,17 +414,6 @@ app.post("/addInstructor", isAdmin,
   These routes are only accessible to admins
 **************************************************** */
 
-app.get("/deleteCourse/:courseId", isAdmin,
-  async (req, res, next) => {
-    try {
-      const courseId = req.params.courseId;
-      // 
-    } catch (e) {
-      next(e);
-    }
-  }
-)
-
 const deleteStudentData = async (courseId) => {
       const answers 
          = await Answer.find({courseId});
