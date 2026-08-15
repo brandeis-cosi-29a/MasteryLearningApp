@@ -182,7 +182,8 @@ const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function () {
   console.error("we are connected!!!");
-  console.error(`process.env.MONGODB_URL=${process.env.MONGODB_URL}`);
+  // never log MONGODB_URL itself -- the Atlas SRV string embeds the password
+  console.error(`db.host=${db.host}`);
   console.error(`db.name=${db.name}`);
 });
 
