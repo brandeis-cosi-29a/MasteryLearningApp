@@ -231,7 +231,17 @@ const MongoStore = require("connect-mongo")(session);
 const mongoose = require("mongoose"); 
 
 // we load the mongoose server data from the .env file
-mongoose.connect(process.env.MONGODB_URL, {useNewUrlParser: true, useUnifiedTopology: true, family: 4});
+// The promise connect() returns needs its own .catch().  The db.on("error")
+// handler below only sees connection *events*, so without this an unreachable
+// or misconfigured database becomes an unhandled rejection, which Node has
+// treated as fatal since v15 -- the process dies on a stack trace instead of
+// saying what went wrong.  Report the reason and exit cleanly; never print the
+// URL itself, because the Atlas SRV string embeds the password.
+mongoose.connect(process.env.MONGODB_URL, {useNewUrlParser: true, useUnifiedTopology: true, family: 4})
+  .catch((e) => {
+    console.error(`FATAL: could not connect to MongoDB: ${e.message}`);
+    process.exit(1);
+  });
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function () {
