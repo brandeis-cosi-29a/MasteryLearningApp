@@ -3516,6 +3516,29 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
     async (req, res, next) => {
       try {
 
+        /*
+        Refuse a submission that carries no file, before anything is destroyed.
+
+        None of the upload forms mark the file input as required, so pressing
+        the upload button without choosing a photo posts an empty file part.
+        multer skips a part with no filename (make-middleware.js: `if
+        (!filename) return fileStream.resume()`), so the storage engine never
+        runs: nothing is written to S3 and req.suffix -- which the storage
+        engine sets -- stays undefined.  addImageFilePath has already built
+        req.urlpath, so the replace branch below would delete the student's
+        existing image from S3 and then store req.urlpath+undefined, leaving
+        the answer pointing at ".../<random>_undefined": a key that was never
+        written, and no way back to the one that was deleted.
+
+        Reported as a 400 through the same error page the size-limit rejection
+        in handleUploadError uses.
+        */
+        if (!req.file) {
+          const err = new Error(
+            "No photo was selected.  Choose an image file first, then press the upload button.");
+          err.status = 400;
+          return next(err);
+        }
 
         const probId = req.params.probId;
         const psetId = req.params.psetId;
