@@ -3516,6 +3516,44 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
     async (req, res, next) => {
       try {
 
+        /*
+        Refuse a submission that carries no file, before anything is destroyed.
+
+        None of the upload forms mark the file input as required, so pressing
+        the upload button without choosing a photo posts an empty file part.
+        multer skips a part with no filename (make-middleware.js: `if
+        (!filename) return fileStream.resume()`), so the storage engine never
+        runs: nothing is written to S3 and req.suffix -- which the storage
+        engine sets -- stays undefined.  addImageFilePath has already built
+        req.urlpath, so the replace branch below would delete the student's
+        existing image from S3 and then store req.urlpath+undefined, leaving
+        the answer pointing at ".../<random>_undefined": a key that was never
+        written, and no way back to the one that was deleted.
+
+        Reported as a 400 through the same error page the size-limit rejection
+        in handleUploadError uses.
+        */
+        if (!req.file) {
+          const err = new Error(
+            "No photo was selected.  Choose an image file first, then press the upload button.");
+          err.status = 400;
+          return next(err);
+        }
+
+        /*
+        The URL of the file just uploaded, derived once.  Both storage engines
+        set req.suffix from the file they stored (storageAWS falls back to
+        '.jnk', storageLocal to the empty extension), and the guard above
+        guarantees a file was stored, so this is the key that now exists in S3
+        -- there is nothing left to guess at further down.
+
+        It used to be recomputed separately in each branch below, and only one
+        of the two defaulted a missing suffix, which is why the two failure
+        modes looked different: '<random>_.jpg' when a new answer was created
+        and '<random>_undefined' when an existing one was replaced.  Neither
+        pointed at a real object; the difference was cosmetic.
+        */
+        const newImageFilePath = req.urlpath + req.suffix;
 
         const probId = req.params.probId;
         const psetId = req.params.psetId;
@@ -3582,11 +3620,10 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
                 }
             }
             // now we can store the new image path in the answer
-            
-            let imageFilePath = req.urlpath+req.suffix;
+
             const theAnswer = await Answer.findOneAndUpdate(
               {studentId, problemId: probId},
-              {$set:{imageFilePath}});
+              {$set:{imageFilePath: newImageFilePath}});
             if (res.locals.isStaff) {
               res.redirect('/showReviewsOfAnswer/' + courseId + '/' + psetId + '/' + theAnswer._id);
             } else {
@@ -3601,9 +3638,6 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
             if (answers.length > 0) {
               res.redirect("/showReviewsOfAnswer/" + courseId +"/" + psetId+"/"+ answerIds[0]);
             } else {
-              if (!req.suffix){
-                req.suffix = '.jpg';
-              }
               // in this case the user is a student uploading an image
               // so, now create a new answer with the new photo
               // and store in the database
@@ -3612,7 +3646,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
                 courseId: courseId,
                 psetId: psetId,
                 problemId: probId,
-                imageFilePath: req.urlpath+req.suffix,
+                imageFilePath: newImageFilePath,
                 reviewers: [],
                 numReviews: 0,
                 pendingReviewers: [],

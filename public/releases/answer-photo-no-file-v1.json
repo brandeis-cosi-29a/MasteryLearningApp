@@ -1,0 +1,11 @@
+{
+  "release": "pr-9-empty-photo-guard",
+  "pullRequest": 9,
+  "testedSourceRevision": "a8ee46855daa81615741bcd2f83710a84bd525a2",
+  "sha256": {
+    "app.js": "763453bb63e706692cdabb1396637cadcb9f2a365901eceb8cf0216bb6bfb77d",
+    "views/showProblemToStudent_MLA.ejs": "ebde2eff198a39f1bb0455d15e446e9916d6c031fd65099f8ec00d744a8a58cb",
+    "views/showProblemToStudent_PRA.ejs": "3151941b683f698bcaf29c0b4402af7ba2f0035c3ddf02a85b45dc483b97bdaa",
+    "views/showReviewsOfAnswer.ejs": "3da7d42f670fe2ebd520ad19a750c35d8874be95b05b5340db3ff7c386d1ae6e"
+  }
+}
