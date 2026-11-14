@@ -129,3 +129,44 @@ bulk URL migration is required.
 
 Permission helpers are kept separate from views and storage so later instructor
 policy decisions can change eligibility without rewriting these workflows.
+
+## Deferred owner approval and existing grants
+
+This patch preserves existing course-owner, TA, and student grants. An owner does
+not need a new instructor approval to keep an existing course accessible to its
+current participants. Creating a course and using the instructor material
+library still require active instructor approval. The cross-course object and
+record checks apply to all existing grants immediately, including grants in a
+previously self-created course.
+
+Requiring every existing course's owner to be an active approved instructor is
+deferred to avoid disrupting running courses before grades are submitted. The
+actual impact has not been assessed against production approval records. Such a
+requirement could block an entire course's students and TAs if its owner lacks
+approval; revoking existing roles could also block legitimate participants.
+Nothing in this patch automatically revokes or legitimizes old grants, cleans
+up manufactured memberships, or repairs previously inconsistent stored records.
+Access those retained grants permit within a course remains a separate risk to
+review, so this PR does not claim that all existing authorization state is safe.
+
+After semester grades are submitted, review course ownership and memberships,
+approve legitimate owners, revoke unauthorized grants, and assess whether to
+enforce owner approval for all course access. That later policy can be added to
+the shared `authorize` middleware without changing the import, grading, peer
+review, or storage implementations. Archiving with `active: false` does not
+revoke access and is not a substitute for that review.
+
+## Pre-existing summary defects left for separate work
+
+`/showOneStudentInfo/:courseId/:studentId` and the older
+`/showTheStudentInfo/:courseId/:option` summary/CSV handler call the undefined
+`createGradeSheet` helper on the base branch. The latter also refers to undefined
+`isTA`/`courseId` variables. This PR fixes their authorization and scopes personal
+queries to the target student, but does not repair their existing rendering
+failures. Supported grade/CSV exports and roster workflows are covered by the
+compatibility tests.
+
+Two unchanged templates, `gradeProblemSetJSON.ejs` and `showAllStudentInfo.ejs`,
+also fail EJS compilation on the base branch. All nine templates added or changed
+by this PR compile successfully. These baseline defects are documented for
+separate repairs rather than expanding the security patch.
