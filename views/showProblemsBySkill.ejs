@@ -33,7 +33,7 @@
           const now = new Date();
           %>
             <tr>
-                <td><a href="/showProblem/<%= courseId %>/<%= psetId%>/<%= problem._id %>"><%= problem.description %></a> </td>
+                <td><a href="/previewLibraryProblem/<%= courseId %>/<%= psetId%>/<%= problem._id %>"><%= problem.description %></a> </td>
                 <td>
                 <a href="/addProblemToPset/<%= courseId %>/<%= psetId %>/<%= problem._id %>/<%= skillId %>">Add to Problem Set</a></td>
                 <td><%= problem.createdAt.toISOString() %><br>
@@ -63,7 +63,7 @@
           const now = new Date();
           %>
             <tr>
-                <td><a href="/showProblem/<%= courseId %>/<%= psetId%>/<%= problem._id %>"><%= problem.description %></a> </td>
+                <td><a href="/previewLibraryProblem/<%= courseId %>/<%= psetId%>/<%= problem._id %>"><%= problem.description %></a> </td>
                 <td>
                 <a href="/addProblemToPset/<%= courseId %>/<%= psetId %>/<%= problem._id %>/<%= skillId %>">Add to Problem Set</a></td>
                 <td><%= problem.createdAt.toISOString() %><br>

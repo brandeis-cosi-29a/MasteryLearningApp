@@ -280,6 +280,7 @@ should start with the authorize middleware and then will have those
 functions available in res.locals.
 */
 const {isLoggedIn, hasCourseAccess, hasStaffAccess, isOwner, isInstructor, isAdmin, authorize} = require('./routes/authFunctions.js');
+const {MATERIAL_FIELDS, materialCourseFilter, requireMaterialSource, copyProblemMaterial} = require('./routes/materialAccess');
 
 
 // view engine setup
@@ -1513,19 +1514,19 @@ app.post("/editSkill/:courseId/:skillId", authorize, isOwner,
   }
 }); 
 
-app.get("/importSkills/:courseId", authorize, isOwner,
+app.get("/importSkills/:courseId", authorize, isOwner, isInstructor,
   async (req, res, next) => {
     res.locals.courseId = req.params.courseId;
 
     // for now we will let the user see all of the courses..
     // this is not scalable though!!
-    res.locals.courses = await Course.find({}).sort({name: 1});
+    res.locals.courses = await Course.find(materialCourseFilter(req.user._id)).select("name ownerId guestAccess").sort({name: 1});
 
 
     res.render("importSkills");
 });
 
-app.get("/showSkillsToImport/:courseId/:otherCourseId", authorize, isOwner,
+app.get("/showSkillsToImport/:courseId/:otherCourseId", authorize, isOwner, isInstructor, requireMaterialSource,
   async (req, res, next) => {
     const courseId = req.params.courseId;
     const otherCourseId = req.params.otherCourseId;
@@ -1545,7 +1546,7 @@ app.get("/showSkillsToImport/:courseId/:otherCourseId", authorize, isOwner,
     res.render('showSkillsToImport');
 });
 
-app.get('/importAllSkills/:courseId/:otherCourseId', authorize, isOwner,
+app.get('/importAllSkills/:courseId/:otherCourseId', authorize, isOwner, isInstructor, requireMaterialSource,
   async (req, res, next) => {
     try {
       const courseId = req.params.courseId;
@@ -1558,12 +1559,11 @@ app.get('/importAllSkills/:courseId/:otherCourseId', authorize, isOwner,
         // but when we search the library for problems
         // we will first find ids of all derived skills
         // and then search for problem with skills in that set of Ids.
-        const newSkill = skill;
-        newSkill.isNew = true;
-        newSkill.courseId = courseId;
-        newSkill.original = skill.original?skill.original._id:skill._id;  
-        newSkill.createdAt = new Date();
-        newSkill._id = undefined;
+        const newSkill = new Skill({
+          name: skill.name, shortName: skill.shortName,
+          description: skill.description, level: skill.level,
+          courseId, original: skill.original || skill._id, createdAt: new Date(),
+        });
         await newSkill.save();
 
         let courseSkills = 
@@ -3138,7 +3138,7 @@ app.get("/stopProblem/:courseId/:probId", authorize, isOwner,
 
 
 
-app.get('/showProblemLibrary/:courseId/:psetId', authorize, hasCourseAccess,
+app.get('/showProblemLibrary/:courseId/:psetId', authorize, isOwner, isInstructor,
   async (req,res,next) => {
     res.locals.courseId = req.params.courseId;
     res.locals.psetId = req.params.psetId;
@@ -3155,7 +3155,7 @@ app.get('/showProblemLibrary/:courseId/:psetId', authorize, hasCourseAccess,
 )
 
 
-app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, hasCourseAccess,
+app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, isOwner, isInstructor,
   async (req,res,next) => { 
     /*
       We want to find the list of problems using the specified skill,
@@ -3202,8 +3202,9 @@ app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, hasCourseA
         {skills: {$elemMatch:{$in:variantIds}},
         courseId,
         })
-      .populate('courseId')
-      .populate('psetId')
+      .select(MATERIAL_FIELDS + ' createdAt')
+              .populate('courseId', 'name')
+      .populate('psetId', 'name')
       .sort({createdAt: -1});
 
     //usedProblems = usedProblems.filter((x) => (x.courseId.ownerId == userId))
@@ -3229,18 +3230,22 @@ app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, hasCourseA
     // contains any of the variant skills
     // don't show the problems that have already been used in this course
 
-    // For now we will show any problems based on that skill
+    // Only search teaching material in courses this approved instructor may use.
+    const sourceCourses = await Course.find(materialCourseFilter(req.user._id)).select('_id');
+    const sourceCourseIds = sourceCourses.map(course => course._id);
     const problems =
         await Problem
               .find(
-                {skills: {$elemMatch:{$in:variantIds}},
+                {courseId: {$in: sourceCourseIds},
+                 skills: {$elemMatch:{$in:variantIds}},
                  parentProblemId: {$nin: usedProblemIds},
                  description:{$nin: usedProblems.map((x) => x.description)},
                  _id: {$nin: usedProblemIds},
                 }
               )
-              .populate('courseId')
-              .populate('psetId')
+              .select(MATERIAL_FIELDS + ' createdAt')
+              .populate('courseId', 'name')
+              .populate('psetId', 'name')
               .sort({createdAt: -1});
 
 
@@ -3316,23 +3321,18 @@ app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, hasCourseA
   contain multiple skills, we are only looking for problems that contain
   a single skill (or a variant) and the new problem will just have that new skill
 */
-app.get("/addProblemToPset/:courseId/:psetId/:probId/:skillId", authorize, isOwner,
-  async (req, res, next) => {
-    const courseId = req.params.courseId;
-    const probId = req.params.probId;
-    const psetId = req.params.psetId;
-    const skillId = req.params.skillId;
+app.get('/previewLibraryProblem/:courseId/:psetId/:sourceProblemId',
+  authorize, isOwner, isInstructor, requireMaterialSource,
+  (req, res) => res.render('previewLibraryProblem', {
+    courseId: req.params.courseId, psetId: req.params.psetId,
+    sourceProblem: req.sourceProblem, sourceCourse: req.sourceCourse,
+  })
+);
 
-    // create a copy of the problem object
-    const problem = await Problem.findOne({_id:probId}); 
-    const newProblem = problem;
-    newProblem.isNew = true;
-    newProblem.courseId = courseId;
-    newProblem.psetId = psetId;
-    newProblem.parentProblemId = problem._id;  
-    newProblem.createdAt = new Date();
-    newProblem.skills = [skillId];
-    newProblem._id = undefined;
+app.get("/addProblemToPset/:courseId/:psetId/:sourceProblemId/:skillId", authorize, isOwner, isInstructor, requireMaterialSource,
+  async (req, res, next) => {
+    const {courseId, psetId, skillId} = req.params;
+    const newProblem = new Problem(copyProblemMaterial(req.sourceProblem, {courseId, psetId, skillId}));
     await newProblem.save();
 
 
