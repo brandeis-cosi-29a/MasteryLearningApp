@@ -60,7 +60,7 @@ function models() {
           let found = rows.filter(row => matches(row, this.filter)).map(row => new Document({...row}));
           if (this.maxResults !== undefined) found = found.slice(0, this.maxResults);
           for (const field of this.populations) {
-            const model = ({studentId: 'User', reviewerId: 'User', skillId: 'Skill', skills: 'Skill', courseId: 'Course', psetId: 'ProblemSet', examId: 'ProblemSet'})[field];
+            const model = ({userId: 'User', studentId: 'User', reviewerId: 'User', skillId: 'Skill', skills: 'Skill', courseId: 'Course', psetId: 'ProblemSet', examId: 'ProblemSet'})[field];
             if (!model) throw Error(`Unsupported population ${field}`);
             const populated = value => db[model].rows.find(row => equal(row._id, value)) || value;
             for (const row of found) row[field] = Array.isArray(row[field]) ? row[field].map(populated) : populated(row[field]);

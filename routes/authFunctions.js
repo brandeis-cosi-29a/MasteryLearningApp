@@ -19,6 +19,7 @@ const {validateParams, validateBody} = require('./courseScope');
 const {normalizeEmail} = require('../config/emailIdentity');
 const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
 const isAdminEmail = email => !!adminEmail && normalizeEmail(email) === adminEmail;
+const {requireApprovedCourseOwner} = require('./courseOwnerAccess');
 
 
 // route middleware to make sure a user is logged in
@@ -60,11 +61,13 @@ const isLoggedIn = async (req, res, next) => {
       if (!validId(req.params.courseId)) throw createError(404);
       const course = await Course.findOne({_id: req.params.courseId});
       if (!course) throw createError(404);
+      const isAdministrator = isAdminEmail(req.user.googleemail);
+      await requireApprovedCourseOwner(course, isAdministrator);
       const member = await CourseMember.findOne({studentId: req.user._id, courseId: course._id});
       const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
       res.locals.courseInfo = res.locals.course = course;
       res.locals.isInstructor = !!instructor;
-      res.locals.isAdmin = isAdminEmail(req.user.googleemail);
+      res.locals.isAdmin = isAdministrator;
       res.locals.isTA = member?.role === 'ta';
       res.locals.isEnrolled = member?.role === 'student';
       // Preserve existing owner/admin and approved-instructor-as-TA permissions,

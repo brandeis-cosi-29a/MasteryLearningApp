@@ -81,15 +81,14 @@ test('body and query IDs cannot smuggle foreign records into authorized actions'
   assert.equal(uploads.length, 0);
 });
 
-test('existing course access survives missing owner approval while new creation and foreign records remain denied', async () => {
+test('semester-end policy rejects retained grants until the course owner is approved', async () => {
   const {app, db, ids, writes} = fixture();
   db.Instructor.rows.length = 0;
   await serve(app, async request => {
     for (const user of [ids.owner, ids.ta, ids.student]) {
-      assert.equal((await request(`/showCourse/${ids.course}`, {user})).status, 302);
+      assert.equal((await request(`/showCourse/${ids.course}`, {user})).status, 403);
     }
-    assert.equal((await request(`/getGradesAsJSON/${ids.course}`, {user: ids.ta})).status, 200);
-    assert.equal((await request(`/showReviewsOfAnswer/${ids.course}/${ids.pset}/${ids.otherAnswer}`, {user: ids.owner})).status, 404);
+    assert.equal((await request(`/getGradesAsJSON/${ids.course}`, {user: ids.ta})).status, 403);
     assert.equal((await request('/createNewCourse', {user: ids.owner, method: 'POST',
       headers: {'content-type': 'application/x-www-form-urlencoded'}, body: 'courseName=Test&norobot=on',
     })).status, 403);

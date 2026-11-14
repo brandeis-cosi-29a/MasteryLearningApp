@@ -27,9 +27,10 @@ function fixture(options = {}) {
   for (const [user, role] of [['ta', 'ta'], ['student', 'student'], ['classmate', 'student']]) db.CourseMember.rows.push({_id: id(200 + db.CourseMember.rows.length), courseId: ids.course, studentId: ids[user], role});
   db.Instructor.rows.push({_id: id(300), userId: ids.owner, status: 'active'});
   const modelSubstitutes = Object.fromEntries(Object.entries(db).flatMap(([name, model]) => [[`../models/${name}`, model], [`./models/${name}`, model], [`./models/${name}.js`, model]]));
-  const material = load('routes/materialAccess.js', modelSubstitutes);
+  const owners = load('routes/courseOwnerAccess.js', modelSubstitutes);
+  const material = load('routes/materialAccess.js', {...modelSubstitutes, './courseOwnerAccess': owners});
   const scope = load('routes/courseScope.js', {...modelSubstitutes, './materialAccess': material});
-  const auth = load('routes/authFunctions.js', {...modelSubstitutes, './materialAccess': material, './courseScope': scope});
+  const auth = load('routes/authFunctions.js', {...modelSubstitutes, './materialAccess': material, './courseScope': scope, './courseOwnerAccess': owners});
   const records = load('routes/recordAccess.js', {...modelSubstitutes, './materialAccess': material});
   const authRouter = express.Router();
   authRouter.use((req, res, next) => {

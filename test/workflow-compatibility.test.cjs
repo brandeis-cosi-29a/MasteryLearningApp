@@ -8,6 +8,7 @@ test('separate shared problem bank supports skill import, library search, previe
   db.Course.rows[0].name = 'COSI 29A';
   db.Course.rows[1].name = 'Discrete Math Problem Bank';
   db.Course.rows[1].ownerId = ids.outsider;
+  db.Instructor.rows.push({_id: id(301), userId: ids.outsider, status: 'active'});
   db.Course.rows[1].guestAccess = 'instructors';
   db.Problem.rows[1].createdAt = new Date();
   db.Problem.rows[1].pendingReviews = [{answerId: ids.otherAnswer, reviewerId: ids.outsider}];
