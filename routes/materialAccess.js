@@ -10,6 +10,7 @@ const MATERIAL_FIELDS = 'courseId psetId description problemText mimeType answer
 
 // Sharing authorizes teaching-material reads, never student-record access.
 const materialCourseFilter = async userId => ({
+  accessDisabled: {$ne: true},
   ownerId: {$in: await approvedOwnerIds()},
   $or: [{ownerId: userId}, {guestAccess: {$in: ['instructors', 'all']}}],
 });

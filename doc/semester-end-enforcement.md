@@ -22,3 +22,18 @@ student records.
 Approving an owner permits existing course grants to be used again; it does not
 establish that those grants were legitimate. Course and membership review are
 therefore necessary alongside the code change.
+
+## Reversible course lock
+
+`Course.accessDisabled: true` blocks non-administrator course access and removes
+the course from shared-material listings, previews, and imports, even if its
+owner remains approved. This allows one course to be quarantined without
+affecting other courses owned by the same instructor. Administrators retain
+record access for recovery. No public course-edit route can change this field;
+it is set only through the institution's administrative database process.
+
+The field defaults to false; existing records without it remain unlocked. No
+bulk migration is needed. `active: false` still means archived, and does not
+revoke access. Locking does not delete courses, memberships, answers, grades, or
+images. Unlocking restores whatever existing grants allow, so review those
+grants before restoring a quarantined course.
