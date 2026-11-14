@@ -19,5 +19,17 @@ creation or student-record permissions.
    fresh review state, and start hidden until released. Skill lineage and problem
    parent references remain available for the existing library matching.
 
+3. **Course object scope:** the shared course middleware validates URL objects
+   and their complete parent chain (course, problem set, problem, answer, review,
+   regrade request). Students targeted by staff must have course membership or a
+   historical course submission. Skill reads/assignments accept explicit
+   `CourseSkill` links for legacy sharing, while editing requires owning the
+   skill's actual course. Body/query references and multipart fields are checked
+   before handlers write; photo targets are checked before the storage middleware.
+   Malformed or mismatched objects return 404, and missing permission returns 403.
+   Authorization no longer creates owner memberships during read requests.
+   The HTTP regression suite exercises every mounted route carrying object IDs,
+   foreign parents, same-course parent mismatches, and multipart/body/query IDs.
+
 Production deployment and storage configuration are separate from opening this
 PR. No production student records are used by the regression suite.

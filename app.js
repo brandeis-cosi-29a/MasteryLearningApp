@@ -281,6 +281,7 @@ functions available in res.locals.
 */
 const {isLoggedIn, hasCourseAccess, hasStaffAccess, isOwner, isInstructor, isAdmin, authorize} = require('./routes/authFunctions.js');
 const {MATERIAL_FIELDS, materialCourseFilter, requireMaterialSource, copyProblemMaterial} = require('./routes/materialAccess');
+const {validateBodyScope, requireSkillOwner} = require('./routes/courseScope');
 
 
 // view engine setup
@@ -880,6 +881,7 @@ app.post("/uploadRoster/:courseId",
   authorize, hasStaffAccess,
   memoryUpload.single('sections'),
   handleUploadError(STAFF_FILE_SIZE_LIMIT),
+  validateBodyScope,
  async (req, res, next) => {
 
     const courseId = req.params.courseId;
@@ -1481,7 +1483,7 @@ app.get("/showSkill/:courseId/:skillId", authorize, hasCourseAccess,
   }
 });
 
-app.get("/editSkill/:courseId/:skillId", authorize, isOwner,
+app.get("/editSkill/:courseId/:skillId", authorize, isOwner, requireSkillOwner,
   async (req, res, next) => {
   try {
     const id = req.params.skillId;
@@ -1495,7 +1497,7 @@ app.get("/editSkill/:courseId/:skillId", authorize, isOwner,
 });
 
 
-app.post("/editSkill/:courseId/:skillId", authorize, isOwner,
+app.post("/editSkill/:courseId/:skillId", authorize, isOwner, requireSkillOwner,
   async (req, res, next) => {
   try {
     const skill = await Skill.findOne({_id: req.params.skillId});
@@ -1680,6 +1682,7 @@ app.post("/uploadProblems/:courseId/:psetId",
      {name:"skill",maxCount:1},
     ]),
   handleUploadError(STAFF_FILE_SIZE_LIMIT),
+  validateBodyScope,
   async (req, res, next) => {
   try {
     const psetId = req.params.psetId;
@@ -1882,7 +1885,7 @@ app.get("/showProblemSetToStudent_PRA/:courseId/:psetId", authorize, hasCourseAc
       = await Problem.find({psetId: psetId});
 
   res.locals.courseInfo = await Course.findOne({_id: courseId}, "ownerId");
-  res.locals.myAnswers = await Answer.find({psetId: psetId, studentId: userId});
+  res.locals.myAnswers = await Answer.find({courseId: req.params.courseId, psetId: psetId, studentId: userId});
   res.locals.pids = res.locals.myAnswers.map((x) => {
     if (!x.problemId) {
       res.json(res.locals.myAnswers);
@@ -1921,7 +1924,7 @@ app.get("/showProblemSetToStudent_MLA/:courseId/:psetId", authorize, hasCourseAc
   res.locals.problems.sort((a,b) => compareSkills(a.skills[0],b.skills[0]));
 
   res.locals.courseInfo = await Course.findOne({_id: courseId}, "ownerId");
-  res.locals.myAnswers = await Answer.find({psetId: psetId, studentId: userId});
+  res.locals.myAnswers = await Answer.find({courseId: req.params.courseId, psetId: psetId, studentId: userId});
   res.locals.pids = res.locals.myAnswers.map((x) => {
     if (!x.problemId) {
       res.json(res.locals.myAnswers);
@@ -2123,6 +2126,7 @@ const transform_from_gradescope = (row) => {
 app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
   memoryUpload.single('grades'),
   handleUploadError(STAFF_FILE_SIZE_LIMIT),
+  validateBodyScope,
  async (req, res, next) => {
   try{
 
@@ -2237,7 +2241,7 @@ app.get("/gradeProblemSet/:courseId/:psetId", authorize, hasStaffAccess,
   res.locals.enrolledStudents = enrolledStudents;
 
   res.locals.problems = problems;
-  res.locals.answers = await Answer.find({psetId: psetId});
+  res.locals.answers = await Answer.find({courseId: req.params.courseId, psetId: psetId});
   res.locals.courseInfo = await Course.findOne({_id: res.locals.problemSet.courseId}, "ownerId");
   const memberList = await CourseMember.find({courseId: res.locals.courseInfo._id,role:'student'});
   res.locals.students = memberList.map((x) => x.studentId);
@@ -2245,7 +2249,7 @@ app.get("/gradeProblemSet/:courseId/:psetId", authorize, hasStaffAccess,
 
   const taList = await CourseMember.find({courseId: res.locals.courseInfo._id, role:{$in:["ta","owner"]}}).populate('studentId');
   const taIds = taList.map((x) => x.studentId._id+"");
-  const taReviews = await Review.find({psetId: psetId, reviewerId: {$in: taIds}});
+  const taReviews = await Review.find({courseId: req.params.courseId, psetId: psetId, reviewerId: {$in: taIds}});
 
   res.locals.taReviews = taReviews;
   let userIsOwner = req.user._id.equals(res.locals.courseInfo.ownerId);
@@ -2550,10 +2554,10 @@ const generateTex = (problems) => {
            const makeupOf = pset.makeupOf; // the id of the Exam that this exam is a makeup for
            let tookExamEmails0 
                = (await PostedGrades
-                        .find({examId: makeupOf}));
+                        .find({courseId, examId: makeupOf}));
            tookExamEmails
                = (await PostedGrades
-                        .find({examId: makeupOf})
+                        .find({courseId, examId: makeupOf})
                         .sort({email:1})) 
                         .map((x) => x.email);
            studentsWhoCanTakeExam 
@@ -3039,7 +3043,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
 
     // get info about answers
       
-    const allAnswers = await Answer.find({problemId: probId});
+    const allAnswers = await Answer.find({courseId: req.params.courseId, problemId: probId});
     const answerCount = allAnswers.length; 
     const usersAnswers = 
       await Answer
@@ -3047,7 +3051,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
               .sort({createdAt:-1});
     const theAnswer = (usersAnswers.length==0)?{answer:""}:usersAnswers[0];
     
-    const reviews = await Review.find({psetId:psetId, problemId: probId});
+    const reviews = await Review.find({courseId: req.params.courseId, psetId:psetId, problemId: probId});
     const reviewCount = reviews.length;
     const averageReview = reviews.reduce((t, x) => t + x.points, 0) / reviews.length;
     
@@ -3105,8 +3109,8 @@ app.get("/showProblem/:courseId/:psetId/:probId",
       }
     } else {
       if (course.courseType == "pra") {
-        const answers = await Answer.find({problemId: probId});
-        const reviews = await Review.find({problemId: probId});
+        const answers = await Answer.find({courseId: req.params.courseId, problemId: probId});
+        const reviews = await Review.find({courseId: req.params.courseId, problemId: probId});
         res.locals.numAnswers = answers.length;
         res.locals.numReviews = reviews.length;
         res.render("showProblemToStaff_PRA");    
@@ -3373,7 +3377,7 @@ app.get("/showAllAnswers/:courseId/:probId", authorize, hasCourseAccess,
     const course = await Course.findOne({_id: courseId});
 
 
-    const userReviews = await Review.find({problemId: probId, reviewerId: userId});
+    const userReviews = await Review.find({courseId: req.params.courseId, problemId: probId, reviewerId: userId});
     const allSkills = await Skill.find({courseId: courseId});
 
     const getSkill = (id, vals) => getElementBy_id(probId, vals);
@@ -3382,8 +3386,8 @@ app.get("/showAllAnswers/:courseId/:probId", authorize, hasCourseAccess,
     let answers = []
     let reviews = []
     if (canView) {
-      answers = await Answer.find({problemId: probId}).collation({locale: "en", strength: 2}).sort({answer: 1});
-      reviews = await Review.find({problemId: probId});
+      answers = await Answer.find({courseId: req.params.courseId, problemId: probId}).collation({locale: "en", strength: 2}).sort({answer: 1});
+      reviews = await Review.find({courseId: req.params.courseId, problemId: probId});
     }
     let taList = await CourseMember.find({courseId: courseId, role: "ta"}).populate('studentId'); 
     taList = taList.map((x) => x.studentId._id);
@@ -3428,7 +3432,7 @@ app.post("/saveAnswer/:courseId/:psetId/:probId",
       const psetId = req.params.psetId;
       const courseId = req.params.courseId;
 
-      const answers = await Answer.find({studentId: req.user._id, problemId: probId});
+      const answers = await Answer.find({courseId: req.params.courseId, studentId: req.user._id, problemId: probId});
 
       const answerIds = answers.map((x) => x._id);
       const reviews = await Review.find({answerId: {$in: answerIds}});
@@ -3450,7 +3454,7 @@ app.post("/saveAnswer/:courseId/:psetId/:probId",
 
         // we need to delete any previous answers for this problem
         // each problem should have at most one answer per student
-        await Answer.deleteMany({studentId: req.user._id, problemId: probId});
+        await Answer.deleteMany({courseId, psetId, studentId: req.user._id, problemId: probId});
 
         await newAnswer.save();
 
@@ -3567,7 +3571,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
 
         // look to see if the user has already uploaded an answer
         // to this problem and if that answer has been reviewed
-        const answers = await Answer.find({studentId, problemId: probId});
+        const answers = await Answer.find({courseId: req.params.courseId, studentId, problemId: probId});
         const answerIds = answers.map((x) => x._id);
         const reviews = await Review.find({answerId: {$in: answerIds}});
   
@@ -3622,7 +3626,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
             // now we can store the new image path in the answer
 
             const theAnswer = await Answer.findOneAndUpdate(
-              {studentId, problemId: probId},
+              {courseId, psetId, studentId, problemId: probId},
               {$set:{imageFilePath: newImageFilePath}});
             if (res.locals.isStaff) {
               res.redirect('/showReviewsOfAnswer/' + courseId + '/' + psetId + '/' + theAnswer._id);
@@ -3656,7 +3660,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
       
               // we need to delete any previous answers for this problem
               // each problem should have at most one answer per student
-              await Answer.deleteMany({studentId, problemId: probId});
+              await Answer.deleteMany({courseId, psetId, studentId, problemId: probId});
       
               await newAnswer.save();
               res.redirect("/showProblem/" +courseId+"/" + psetId+"/"+probId);
@@ -4491,7 +4495,7 @@ app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess,
       // and decrement the optimistic numReview field
       // pendingReviews has form x = {answerId,reviewerId,timeSent}
 
-      let tempAnswer = await Answer.findOne({_id: x.answerId});
+      let tempAnswer = await Answer.findOne({_id: x.answerId, courseId, psetId, problemId: probId});
       // the answer may be gone: uploadAnswerPhoto deletes and recreates the
       // answer when a student replaces their photo, which leaves the pending
       // review pointing at an _id that no longer exists
@@ -4518,14 +4522,14 @@ app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess,
     // supposed to be reviewing, i.e. the user is a pendingReviewer
     // if there is such an answer then we return that one to the user.
 
-    let answer = await Answer.findOne({problemId:probId,pendingReviewers:req.user._id});
+    let answer = await Answer.findOne({courseId: req.params.courseId, problemId:probId,pendingReviewers:req.user._id});
     if (answer) {
       // send the user the review they were already assigned!
       res.redirect("/showReviewsOfAnswer/" + courseId+"/"+psetId+"/"+answer._id);
     } else {
       // the user has not yet been assigned an answer for this problem
       // next, we find all answers to this Problem, sorted by numReviews
-      let answers = await Answer.find({problemId: probId}).sort({numReviews: "asc"});
+      let answers = await Answer.find({courseId: req.params.courseId, problemId: probId}).sort({numReviews: "asc"});
   
       // find first answer not already reviewed by the user
       let i = 0;
@@ -4583,12 +4587,12 @@ try {
 
   let problem = await Problem.findOne({_id: probId});
 
-  const answers = await Answer.find({studentId: studentId, problemId: probId});
+  const answers = await Answer.find({courseId: req.params.courseId, studentId: studentId, problemId: probId});
 
   if (!answers){
     res.send("this user already has answered the question")
   }else {
-    let answer = await Answer.findOne({problemId: probId, studentId: studentId});
+    let answer = await Answer.findOne({courseId: req.params.courseId, problemId: probId, studentId: studentId});
     let newAnswer = new Answer({
       studentId: studentId,
       courseId: problem.courseId,
@@ -4628,7 +4632,7 @@ try {
   let problem = await Problem.findOne({_id: probId});
   res.locals.student = await User.findOne({_id: studentId});
 
-  let answer = await Answer.findOne({problemId: probId, studentId: studentId});
+  let answer = await Answer.findOne({courseId: req.params.courseId, problemId: probId, studentId: studentId});
 
 
   res.locals.answer = answer;
@@ -4636,7 +4640,7 @@ try {
 
   let myReviews = [];
   if (answer != undefined) {
-    myReviews = await Review.find({problemId: problem._id, answerId: answer._id, reviewerId: req.user._id});
+    myReviews = await Review.find({courseId: req.params.courseId, problemId: problem._id, answerId: answer._id, reviewerId: req.user._id});
   }
   res.locals.numReviewsByMe = myReviews.length;
   res.locals.alreadyReviewed = myReviews.length > 0;
@@ -4867,7 +4871,7 @@ app.get("/showReviewsOfAnswer/:courseId/:psetId/:answerId", authorize, hasCourse
     const problem = await Problem.findOne({_id: answer.problemId});
     res.locals.problem = problem;
     res.locals.student = await User.findOne({_id: answer.studentId});
-    res.locals.reviews = await Review.find({answerId: answerId}).populate('reviewerId').populate('skills').sort({points: "asc", review: "asc"});
+    res.locals.reviews = await Review.find({courseId, psetId, problemId: answer.problemId, studentId: answer.studentId, answerId}).populate('reviewerId').populate('skills').sort({points: "asc", review: "asc"});
     const taList = await CourseMember.find({courseId: courseId, role: "ta"});
     res.locals.taList = taList.map((x) => x.studentId._id);
 
@@ -4895,14 +4899,14 @@ src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-
 
     res.locals.skills = await Skill.find({_id: {$in: problem.skills}});
     res.locals.allSkills = await Skill.find({courseId: answer.courseId});
-    res.locals.regradeRequests = await RegradeRequest.find({answerId: answerId});
+    res.locals.regradeRequests = await RegradeRequest.find({courseId, psetId, problemId: answer.problemId, studentId: answer.studentId, answerId});
 
     if (res.locals.isStaff || course.courseType=='pra' && !personal) {
       res.render("showReviewsOfAnswer");
     } else {
       res.locals.review 
         = await Review
-                .findOne({_id: answer.officialReviewId})
+                .findOne({_id: answer.officialReviewId, courseId, psetId, problemId: answer.problemId, answerId: answer._id, studentId: answer.studentId})
                 .populate('skills');
       if (!res.locals.review) {
         res.locals.review = {review: "no review yet!", points: 0, skills: []};
@@ -4926,7 +4930,7 @@ app.get("/showReviewsByUser/:courseId/:psetId/:probId", authorize, hasCourseAcce
   res.locals.problem = await Problem.findOne({_id: probId});
   res.locals.course = await Course.findOne({_id: res.locals.problem.courseId});
   res.locals.usersReviews = await Review.find({reviewerId: req.user._id, problemId: probId});
-  res.locals.allReviews = await Review.find({problemId: probId});
+  res.locals.allReviews = await Review.find({courseId: req.params.courseId, problemId: probId});
   const answerIds = res.locals.usersReviews.map((r) => r.answerId);
   res.locals.usersReviewedAnswers = await Answer.find({_id: {$in: answerIds}});
   res.render("showReviewsByUser");

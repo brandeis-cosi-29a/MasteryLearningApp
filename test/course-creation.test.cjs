@@ -13,6 +13,7 @@ test('direct course creation requires active instructor approval before writes',
     '../models/Instructor': {findOne: async q => approval?.status === q.status ? approval : null},
     '../models/CourseMember': {findOne: async () => null},
     '../models/Course': {},
+    './courseScope': {},
   });
   class Course {
     constructor(data) {Object.assign(this, data); this._id = 'new-course';}
