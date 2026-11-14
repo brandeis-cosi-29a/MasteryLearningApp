@@ -3066,7 +3066,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
     const answerCount = allAnswers.length; 
     const usersAnswers = 
       await Answer
-              .find({psetId:psetId,problemId: probId, studentId: userId})
+              .find({courseId, psetId, problemId: probId, studentId: userId})
               .sort({createdAt:-1});
     const theAnswer = (usersAnswers.length==0)?{answer:""}:usersAnswers[0];
     

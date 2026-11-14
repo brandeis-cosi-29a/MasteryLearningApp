@@ -9,7 +9,7 @@ test('source sharing permits material imports without copying student review sta
   const owner = id(1), other = id(2), source = id(3), pset = id(4), problem = id(5);
   db.Course.rows.push({_id: source, ownerId: other, guestAccess: 'none'});
   db.ProblemSet.rows.push({_id: pset, courseId: source});
-  db.Problem.rows.push({_id: problem, courseId: source, psetId: pset, problemText: 'Bank question', rubric: 'Bank rubric', pendingReviews: [{answerId: id(9), reviewerId: id(10)}]});
+  db.Problem.rows.push({_id: problem, courseId: source, psetId: pset, problemText: 'Bank question', rubric: 'Bank rubric', visible: true, peerReviewable: false, pendingReviews: [{answerId: id(9), reviewerId: id(10)}]});
   const request = {params: {sourceProblemId: String(problem)}, user: {_id: owner}};
   const invoke = req => new Promise(resolve => access.requireMaterialSource(req, {}, err => resolve(err)));
   assert.equal((await invoke(request)).status, 404, 'private source denied');
@@ -23,7 +23,8 @@ test('source sharing permits material imports without copying student review sta
     assert.equal(copy.problemText, 'Bank question');
     assert.equal(copy.rubric, 'Bank rubric');
     assert.equal(copy.pendingReviews.length, 0);
-    assert.equal(copy.visible, false);
+    assert.equal(copy.visible, true);
+    assert.equal(copy.peerReviewable, false);
   }
   db.Course.rows[0].guestAccess = 'none';
   db.Course.rows[0].ownerId = owner;

@@ -5,7 +5,7 @@ const createError = require('http-errors');
 
 const validId = value => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 const sameId = (a, b) => a != null && b != null && String(a._id || a) === String(b._id || b);
-const MATERIAL_FIELDS = 'courseId psetId description problemText mimeType answerMimeType rubric skills points parentProblemId variant';
+const MATERIAL_FIELDS = 'courseId psetId description problemText mimeType answerMimeType rubric skills points parentProblemId variant visible allowAnswers submitable answerable peerReviewable';
 
 // Sharing authorizes teaching-material reads, never student-record access.
 const materialCourseFilter = userId => ({$or: [
@@ -41,8 +41,9 @@ function copyProblemMaterial(source, {courseId, psetId, skillId}) {
     mimeType: source.mimeType, answerMimeType: source.answerMimeType,
     rubric: source.rubric, points: source.points, variant: source.variant,
     createdAt: new Date(), pendingReviews: [],
-    visible: false, allowAnswers: false, submitable: false,
-    answerable: false, peerReviewable: false,
+    visible: source.visible, allowAnswers: source.allowAnswers,
+    submitable: source.submitable, answerable: source.answerable,
+    peerReviewable: source.peerReviewable,
   };
 }
 

@@ -16,8 +16,8 @@ creation or student-record permissions.
    owned by the requester or shared with instructors (`instructors` or `all`).
    Source sharing grants no answer, grade, roster, or review access. Previews use
    a separate material-only route; imported problems get destination IDs and
-   fresh review state, and start hidden until released. Skill lineage and problem
-   parent references remain available for the existing library matching.
+   fresh review state, and retain the source material's availability flags. Skill
+   lineage and problem parent references remain available for the existing library matching.
 
 3. **Course object scope:** the shared course middleware validates URL objects
    and their complete parent chain (course, problem set, problem, answer, review,
@@ -116,3 +116,16 @@ using the protected image route. Legacy local filenames remain supported.
 Run `npm test` on Node 24. Tests use real Express/Multer/EJS and the production
 routes with synthetic identities, simulated MongoDB/S3, and localhost servers.
 The suite does not substitute permissive versions of the authorization helpers.
+
+## Compatibility validation
+
+The regression suite covers a separate shared bank through skill import, library
+search, preview, and problem copying, including source sharing revocation. It
+also exercises own feedback/regrades, staff grading/rosters/grade exports, peer
+assignment/history/class browsing, first photo uploads, staff replacements,
+fileless submissions, oversized photos, and authorization before any storage
+write. Import availability flags retain their previous behavior; no schema or
+bulk URL migration is required.
+
+Permission helpers are kept separate from views and storage so later instructor
+policy decisions can change eligibility without rewriting these workflows.

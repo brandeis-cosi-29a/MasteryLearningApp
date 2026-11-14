@@ -76,6 +76,9 @@ async function requireRegradeOwner(req, res, next) {
 
 async function requireReviewRead(req, res, next) {
   try {
+    const review = req.courseScope.review;
+    if (!res.locals.isStaff && !sameId(review.studentId, req.user._id) &&
+        !sameId(review.reviewerId, req.user._id)) throw createError(403);
     if (!await canReadAnswer(req, res, req.courseScope.answer)) throw createError(403);
     next();
   } catch (err) {next(err);}

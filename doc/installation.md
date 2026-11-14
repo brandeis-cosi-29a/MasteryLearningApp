@@ -18,7 +18,9 @@ CLIENT_ID=GOOGLE_CLIENT_ID_GOES_HERE
 CLIENT_SECRET=GOOGLE_SECRET_GOES_HERE
 CALLBACK_URL=http://127.0.0.1:5500/login/authorized
 MONGODB_URL=mongodb://localhost:27017/PICK_A_DATABASE_NAME
-UPLOAD_TO = "LOCAL" # "LOCAL" or "AWS"
+UPLOAD_TO=LOCAL
+NODE_ENV=development
+ALLOW_LOCAL_ANSWER_STORAGE=true
 ```
 the administrator has special privileges, including being able to add or remove instructors and to see all courses on the app.
 
@@ -112,6 +114,14 @@ than the app name unless you have completed Google's brand verification (which r
 ownership of the domain in Google Search Console).
 
 ## Deploying to the cloud
+
+Deployed instances require `UPLOAD_TO=AWS`. Before upgrading an existing
+instance, follow the [private-image cutover and authorization checks](authorization-fix.md#deployment-required-storage-cutover).
+The server verifies all four bucket-level S3 Block Public Access settings before
+listening, and its IAM principal needs `s3:GetBucketPublicAccessBlock` in addition
+to object access. Local image storage is supported only as an explicitly enabled,
+loopback-only testbed; it is not a deployment option.
+
 We currently use render.com to deploy our app from the github repository.
 We use MONGODB Atlas for database access
 and we use AWS S3 for storing images. You can specify an AWS S3 bucket by

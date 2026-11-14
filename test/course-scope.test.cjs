@@ -3,6 +3,26 @@ const assert = require('node:assert/strict');
 const {fixture, serve} = require('./helpers/app.cjs');
 const {id} = require('./helpers/models.cjs');
 
+test('mounted routes keep course authorization and source-sharing checks explicit', () => {
+  const {app, auth} = fixture();
+  const routes = app._router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
+  const recognized = new Set(['courseId', 'psetId', 'examId', 'probId', 'answerId',
+    'reviewId', 'requestId', 'regradeRequestId', 'skillId', 'studentId', 'userId',
+    'sourceProblemId', 'otherCourseId']);
+  for (const route of routes.filter(route => route.path.includes(':courseId'))) {
+    const handlers = route.stack.map(layer => layer.handle);
+    assert(handlers.includes(auth.authorize) || handlers.includes(auth.isAdmin), route.path);
+    for (const [token] of route.path.matchAll(/:([A-Za-z]+Id)\b/g)) {
+      assert(recognized.has(token.slice(1)), `${route.path}: add scope checks for new identifier`);
+    }
+    if (/:(sourceProblemId|otherCourseId)\b/.test(route.path)) {
+      assert(handlers.includes(auth.isOwner), route.path);
+      assert(handlers.includes(auth.isInstructor), route.path);
+      assert(handlers.some(handler => handler.name === 'requireMaterialSource'), route.path);
+    }
+  }
+});
+
 test('all mounted course routes reject foreign URL objects before handlers run', async () => {
   const {app, ids, writes, uploads} = fixture();
   const routes = app._router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
