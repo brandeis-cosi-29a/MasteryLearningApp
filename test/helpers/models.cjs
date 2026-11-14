@@ -27,7 +27,14 @@ function models() {
   for (const name of ['Course', 'CourseMember', 'Instructor', 'User', 'ProblemSet', 'Problem', 'Skill', 'CourseSkill', 'Answer', 'Review', 'RegradeRequest', 'PostedGrades', 'SupportFile']) {
     const rows = [];
     class Document {
-      constructor(data = {}) {Object.assign(this, data); this._id ||= id(sequence++);}
+      constructor(data = {}) {
+        Object.assign(this, data);
+        for (const key of Object.keys(this)) {
+          if ((key.endsWith('Id') || key === '_id' || key === 'original') &&
+              typeof this[key] === 'string' && /^[a-f\d]{24}$/i.test(this[key])) this[key] = new Types.ObjectId(this[key]);
+        }
+        this._id ||= id(sequence++);
+      }
       get id() {return String(this._id);}
       toObject() {return {...this};}
       async save() {

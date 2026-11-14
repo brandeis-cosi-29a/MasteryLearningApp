@@ -28,6 +28,7 @@ function fixture(options = {}) {
   const material = load('routes/materialAccess.js', modelSubstitutes);
   const scope = load('routes/courseScope.js', {...modelSubstitutes, './materialAccess': material});
   const auth = load('routes/authFunctions.js', {...modelSubstitutes, './materialAccess': material, './courseScope': scope});
+  const records = load('routes/recordAccess.js', {...modelSubstitutes, './materialAccess': material});
   const authRouter = express.Router();
   authRouter.use((req, res, next) => {
     req.user = db.User.rows.find(user => String(user._id) === req.headers['x-test-user']);
@@ -57,7 +58,7 @@ function fixture(options = {}) {
     'connect-mongo': () => session.MemoryStore,
     './routes/authRouter': authRouter, './routes/similarity': similarity,
     './routes/updatesARCHIVED.js': {}, './routes/authFunctions.js': auth,
-    './routes/materialAccess': material, './routes/courseScope': scope,
+    './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records,
     ...options.substitutes,
   }, {process: {env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test'}},
     console: {log() {}, error() {}, dir() {}, warn() {}}});

@@ -117,6 +117,10 @@ async function validateBody(req) {
       if (key === 'psetId' && req.courseScope.pset && !sameId(row, req.courseScope.pset)) throw createError(404);
     }
   }
+  if (body.deletes !== undefined) {
+    const values = Array.isArray(body.deletes) ? body.deletes : [body.deletes];
+    for (const value of values) await scopeForCourse(req.params.courseId).reviewById(value);
+  }
   for (const key of ['skill', 'skills']) {
     if (body[key] !== undefined) {
       const values = Array.isArray(body[key]) ? body[key] : [body[key]];

@@ -282,6 +282,8 @@ functions available in res.locals.
 const {isLoggedIn, hasCourseAccess, hasStaffAccess, isOwner, isInstructor, isAdmin, authorize} = require('./routes/authFunctions.js');
 const {MATERIAL_FIELDS, materialCourseFilter, requireMaterialSource, copyProblemMaterial} = require('./routes/materialAccess');
 const {validateBodyScope, requireSkillOwner} = require('./routes/courseScope');
+const {sameId} = require('./routes/materialAccess');
+const {canBrowseAnswers, requireAnswerRead, requireReviewWrite, requirePeerAssignment, requireRegradeOwner, requireReviewRead, answerContent} = require('./routes/recordAccess');
 
 
 // view engine setup
@@ -967,9 +969,9 @@ app.get("/showCourse/:courseId", authorize, hasCourseAccess,
         = await CourseMember
                .findOne({studentId, courseId});
 
-    if (res.locals.isAdmin || ["ta","instructor","owner"].includes(courseMember.role)) {
+    if (res.locals.isStaff) {
       res.redirect("/showCourseToStaff/" + courseId);
-    } else if (["student","guest","audit"].includes(courseMember.role)) {
+    } else if (["student","guest","audit"].includes(courseMember?.role)) {
       res.redirect("/showCourseToStudent/" + courseId);
     } else {
       res.send("You do not have access to this course.");
@@ -1763,7 +1765,7 @@ app.get("/showProblemSet/:courseId/:psetId", authorize, hasCourseAccess,
       const role = member?member.role:"none";
       if (['student','audit','guest'].includes(role)) {
         res.redirect("/showProblemSetToStudent/"+req.params.courseId+"/"+req.params.psetId);
-      } else if (['ta','instructor','owner'].includes(role) || isAdmin) {
+      } else if (res.locals.isStaff) {
         res.redirect("/showProblemSetToStaff/"+req.params.courseId+"/"+req.params.psetId);
       } else {
         res.send("You do not have access to this course.");
@@ -2253,7 +2255,7 @@ app.get("/gradeProblemSet/:courseId/:psetId", authorize, hasStaffAccess,
 
   res.locals.taReviews = taReviews;
   let userIsOwner = req.user._id.equals(res.locals.courseInfo.ownerId);
-  if (userIsOwner || taIds.includes(req.user.id+"")){//taIds.filter((x) => x.equals(req.user._id)).length > 0) {
+  if (res.locals.isStaff){//taIds.filter((x) => x.equals(req.user._id)).length > 0) {
     res.render("gradeProblemSet");
   } else {
     res.send("You are not allowed to grade problem sets.");
@@ -3043,7 +3045,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
 
     // get info about answers
       
-    const allAnswers = await Answer.find({courseId: req.params.courseId, problemId: probId});
+    const allAnswers = res.locals.isStaff ? await Answer.find({courseId, psetId, problemId: probId}) : [];
     const answerCount = allAnswers.length; 
     const usersAnswers = 
       await Answer
@@ -3051,7 +3053,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
               .sort({createdAt:-1});
     const theAnswer = (usersAnswers.length==0)?{answer:""}:usersAnswers[0];
     
-    const reviews = await Review.find({courseId: req.params.courseId, psetId:psetId, problemId: probId});
+    const reviews = res.locals.isStaff ? await Review.find({courseId, psetId, problemId: probId}) : [];
     const reviewCount = reviews.length;
     const averageReview = reviews.reduce((t, x) => t + x.points, 0) / reviews.length;
     
@@ -3377,18 +3379,18 @@ app.get("/showAllAnswers/:courseId/:probId", authorize, hasCourseAccess,
     const course = await Course.findOne({_id: courseId});
 
 
-    const userReviews = await Review.find({courseId: req.params.courseId, problemId: probId, reviewerId: userId});
-    const allSkills = await Skill.find({courseId: courseId});
-
-    const getSkill = (id, vals) => getElementBy_id(probId, vals);
-    const numReviews = userReviews.length;
-    const canView = numReviews >= 2 || isOwner;
-    let answers = []
-    let reviews = []
-    if (canView) {
-      answers = await Answer.find({courseId: req.params.courseId, problemId: probId}).collation({locale: "en", strength: 2}).sort({answer: 1});
-      reviews = await Review.find({courseId: req.params.courseId, problemId: probId});
+    const canView = await canBrowseAnswers(req, res);
+    if (!canView) return next(createError(403, 'Complete two assigned reviews before browsing class answers.'));
+    let answers = await Answer.find({courseId, psetId, problemId: probId}).collation({locale: "en", strength: 2}).sort({answer: 1});
+    if (!res.locals.isStaff) {
+      return res.render('showClassAnswers', {courseId, psetId, problem,
+        answers: answers.map(answerContent)});
     }
+    const userReviews = await Review.find({courseId, psetId, problemId: probId, reviewerId: userId});
+    const allSkills = await Skill.find({courseId});
+    const getSkill = (id, vals) => getElementBy_id(id, vals);
+    const numReviews = userReviews.length;
+    const reviews = await Review.find({courseId, psetId, problemId: probId});
     let taList = await CourseMember.find({courseId: courseId, role: "ta"}).populate('studentId'); 
     taList = taList.map((x) => x.studentId._id);
     res.locals = {
@@ -3682,7 +3684,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
 
 
 
-app.post("/requestRegrade/:courseId/:reviewId", authorize, hasCourseAccess,
+app.post("/requestRegrade/:courseId/:reviewId", authorize, hasCourseAccess, requireRegradeOwner,
   async (req, res, next) => {
   try {
     const reviewId = req.params.reviewId;
@@ -3758,10 +3760,10 @@ app.post("/updateRegradeRequest/:courseId/:regradeRequestId", authorize, hasStaf
 
 
 
-app.get("/thumbsU/:courseId/:mode/:reviewId/:userId", authorize, hasCourseAccess,
+app.get("/thumbsU/:courseId/:mode/:reviewId/:userId", authorize, hasCourseAccess, requireReviewRead,
   async (req, res, next) => {
   let reviewId = req.params.reviewId;
-  let userId = req.params.userId;
+  let userId = req.user._id;
   let mode = req.params.mode;
   if (mode == "select") {
     await Review.findOneAndUpdate({_id: reviewId}, {$push: {upvoters: userId}});
@@ -3772,10 +3774,10 @@ app.get("/thumbsU/:courseId/:mode/:reviewId/:userId", authorize, hasCourseAccess
   res.json({result: "OK"});
 });
 
-app.get("/thumbsD/:courseId/:mode/:reviewId/:userId", authorize, hasCourseAccess,
+app.get("/thumbsD/:courseId/:mode/:reviewId/:userId", authorize, hasCourseAccess, requireReviewRead,
   async (req, res, next) => {
   let reviewId = req.params.reviewId;
-  let userId = req.params.userId;
+  let userId = req.user._id;
   let mode = req.params.mode;
   if (mode == "select") {
     await Review.findOneAndUpdate({_id: reviewId}, {$push: {downvoters: userId}});
@@ -3857,17 +3859,17 @@ app.get("/showOneStudentInfo/:courseId/:studentId", authorize, hasCourseAccess,
     const isTheStudent = req.user._id.equals(studentId);
 
     if (!res.locals.isOwner && !res.locals.isTA && !isTheStudent) {
-      res.send("only the course owner and TAs and the student themselves can see this page");
+      res.status(403).send("only the course owner and TAs and the student themselves can see this page");
     } else {
 
       // get the list of ids of students in the course
-      const memberList = await CourseMember.find({courseId: res.locals.courseInfo._id});
+      const memberList = await CourseMember.find({courseId: res.locals.courseInfo._id, studentId});
       res.locals.students = memberList.map((x) => x.studentId);
 
       res.locals.studentsInfo = await User.find({_id: {$in: res.locals.students}});
 
       res.locals.answers = 
-        await Answer.find({courseId: courseId})
+        await Answer.find({courseId, studentId})
               .populate('skills');
 
       let problems = await Problem.find({courseId: courseId});
@@ -3877,7 +3879,7 @@ app.get("/showOneStudentInfo/:courseId/:studentId", authorize, hasCourseAccess,
       //    await Problem.find({courseId: courseId})
       //         .populate('skills');
 
-      res.locals.reviews = await Review.find({courseId: courseId});
+      res.locals.reviews = await Review.find({courseId, studentId});
 
       const gradeSheet = createGradeSheet(res.locals.studentsInfo, res.locals.problems, res.locals.answers, res.locals.reviews);
 
@@ -4440,7 +4442,7 @@ app.get("/mastery2/:courseId", authorize, isOwner,
   with the $incr and $pull   operators.
 */
 
-app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess,
+app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess, requirePeerAssignment,
   async (req, res, next) => {
 
   try {
@@ -4522,14 +4524,14 @@ app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess,
     // supposed to be reviewing, i.e. the user is a pendingReviewer
     // if there is such an answer then we return that one to the user.
 
-    let answer = await Answer.findOne({courseId: req.params.courseId, problemId:probId,pendingReviewers:req.user._id});
+    let answer = await Answer.findOne({courseId, psetId, problemId:probId, studentId: {$ne: req.user._id}, pendingReviewers:req.user._id});
     if (answer) {
       // send the user the review they were already assigned!
       res.redirect("/showReviewsOfAnswer/" + courseId+"/"+psetId+"/"+answer._id);
     } else {
       // the user has not yet been assigned an answer for this problem
       // next, we find all answers to this Problem, sorted by numReviews
-      let answers = await Answer.find({courseId: req.params.courseId, problemId: probId}).sort({numReviews: "asc"});
+      let answers = await Answer.find({courseId, psetId, problemId: probId, studentId: {$ne: req.user._id}}).sort({numReviews: "asc"});
   
       // find first answer not already reviewed by the user
       let i = 0;
@@ -4621,7 +4623,7 @@ try {
 this is the route for writing a review of a particular student's answer to a problem
 this is what TAs do when grading a problem set
 */
-app.get("/gradeProblem/:courseId/:psetId/:probId/:studentId", authorize, hasCourseAccess,
+app.get("/gradeProblem/:courseId/:psetId/:probId/:studentId", authorize, hasStaffAccess,
 async (req, res, next) => {
 try {
   const courseId = req.params.courseId;
@@ -4673,7 +4675,7 @@ try {
 
 
 */
-app.post("/saveReview2/:courseId/:psetId/:probId/:answerId",authorize, hasCourseAccess,
+app.post("/saveReview2/:courseId/:psetId/:probId/:answerId",authorize, hasCourseAccess, requireReviewWrite,
 
   async (req, res, next) => {
     try {
@@ -4785,7 +4787,7 @@ I want to get rid of this route and not remove any reviews.
 We should just keep a chain or reviews and not allow users to remove them.
 For now, I'll leave this and ignore it. 
 */
-app.post("/removeReviews/:courseId", authorize, hasCourseAccess,
+app.post("/removeReviews/:courseId", authorize, hasStaffAccess,
   async (req, res, next) => {
   try {
     /*
@@ -4793,38 +4795,33 @@ app.post("/removeReviews/:courseId", authorize, hasCourseAccess,
       to remove the reviewerId from the list of reviewers
       for the answer...
       */
-    let deletes = req.body.deletes;
-
-    let reviews = null;
-
-    if (!deletes) {
-      res.send("nothing to delete");
-      return;
-    } else if (typeof deletes == "string") {
-      let review = await Review.findOne({_id: deletes});
-      reviews = [review];
-    } else {
-      reviews = await Review.find({_id: {$in: deletes}});
+    const values = req.body.deletes;
+    if (!values || Array.isArray(values) && values.length === 0) return res.send('nothing to delete');
+    const deletes = [...new Set(Array.isArray(values) ? values : [values])];
+    // authorize() has validated every ID and its parents before any deletion.
+    const reviews = await Review.find({courseId: req.params.courseId, _id: {$in: deletes}});
+    const answerIds = [...new Set(reviews.map(review => String(review.answerId)))];
+    for (const answerId of answerIds) {
+      const answer = await Answer.findOne({_id: answerId, courseId: req.params.courseId});
+      const removed = reviews.filter(review => sameId(review.answerId, answerId));
+      const removedReviewers = removed.map(review => review.reviewerId);
+      const remaining = await Review.find({courseId: req.params.courseId, answerId,
+        _id: {$nin: deletes}});
+      answer.reviewers = answer.reviewers.filter(reviewer =>
+        !removedReviewers.some(id => sameId(id, reviewer)) ||
+        remaining.some(review => sameId(review.reviewerId, reviewer)));
+      answer.numReviews = remaining.length + (answer.pendingReviewers || []).length;
+      if (removed.some(review => sameId(review._id, answer.officialReviewId))) {
+        answer.officialReviewId = undefined;
+        answer.review = undefined;
+        answer.points = undefined;
+        answer.skills = [];
+      }
+      await answer.save();
     }
-
-    let answerId = reviews[0].answerId;
-    let reviewerIds = reviews.map((r) => r.reviewerId);
-    let answer = await Answer.findOne({_id: answerId});
-
-
-    const newReviewerIds = removeElements(answer.reviewers, reviewerIds);
-
-
-    // try to use $pull instead of .save() ***
-    answer.reviewers = newReviewerIds;
-    await answer.save();
-    await Review.deleteMany({_id: {$in: deletes}});
-    //res.send("just updating answer ...")
-    res.redirect(
-      "/showReviewsOfAnswer/"
-      +answer.courseId +"/"
-      +answer.psetId +"/"
-      +answerId);
+    await Review.deleteMany({courseId: req.params.courseId, _id: {$in: deletes}});
+    const answer = await Answer.findOne({_id: answerIds[0], courseId: req.params.courseId});
+    res.redirect('/showReviewsOfAnswer/' + answer.courseId + '/' + answer.psetId + '/' + answer._id);
 
   } catch (e) {
     next(e);
@@ -4841,7 +4838,7 @@ function removeElements(slist, rems) {
   return slist;
 }
 
-app.get("/showReviewsOfAnswer/:courseId/:psetId/:answerId", authorize, hasCourseAccess,
+app.get("/showReviewsOfAnswer/:courseId/:psetId/:answerId", authorize, hasCourseAccess, requireAnswerRead,
   async (req, res, next) => {
   try {
 
@@ -4864,6 +4861,17 @@ app.get("/showReviewsOfAnswer/:courseId/:psetId/:answerId", authorize, hasCourse
     const answer = await Answer.findOne({_id: answerId});
     res.locals.answer = answer;
     res.locals.courseInfo = await Course.findOne({_id: courseId});
+    if (!res.locals.isStaff && !sameId(answer.studentId, req.user._id)) {
+      res.locals.answer = answerContent(answer);
+      const problem = req.courseScope.problem;
+      const myReviews = await Review.find({courseId, psetId,
+        problemId: problem._id, answerId: answer._id, reviewerId: req.user._id});
+      return res.render('showPeerAnswer', {
+        courseId, psetId, answer: res.locals.answer, problem, myReviews,
+        skills: await Skill.find({_id: {$in: problem.skills}}),
+        canSubmitReview: myReviews.length === 0 && answer.pendingReviewers.some(id => sameId(id, req.user._id)),
+      });
+    }
 
 
 
@@ -4901,7 +4909,7 @@ src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-
     res.locals.allSkills = await Skill.find({courseId: answer.courseId});
     res.locals.regradeRequests = await RegradeRequest.find({courseId, psetId, problemId: answer.problemId, studentId: answer.studentId, answerId});
 
-    if (res.locals.isStaff || course.courseType=='pra' && !personal) {
+    if (res.locals.isStaff) {
       res.render("showReviewsOfAnswer");
     } else {
       res.locals.review 
@@ -4918,7 +4926,7 @@ src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-
   }
 });
 
-app.get("/showReviewsByUser/:courseId/:psetId/:probId", authorize, hasCourseAccess,
+app.get("/showReviewsByUser/:courseId/:psetId/:probId", authorize, hasCourseAccess, requirePeerAssignment,
   async (req, res, next) => {
   const probId = req.params.probId;
   res.locals.probId = probId;
@@ -4927,12 +4935,17 @@ app.get("/showReviewsByUser/:courseId/:psetId/:probId", authorize, hasCourseAcce
   const psetId = req.params.psetId;
   res.locals.psetId = psetId;
 
-  res.locals.problem = await Problem.findOne({_id: probId});
-  res.locals.course = await Course.findOne({_id: res.locals.problem.courseId});
-  res.locals.usersReviews = await Review.find({reviewerId: req.user._id, problemId: probId});
-  res.locals.allReviews = await Review.find({courseId: req.params.courseId, problemId: probId});
-  const answerIds = res.locals.usersReviews.map((r) => r.answerId);
-  res.locals.usersReviewedAnswers = await Answer.find({_id: {$in: answerIds}});
+  res.locals.problem = req.courseScope.problem;
+  res.locals.course = res.locals.courseInfo;
+  const assigned = await Answer.find({courseId, psetId, problemId: probId,
+    ...(res.locals.isStaff ? {} : {reviewers: req.user._id})});
+  res.locals.usersReviews = await Review.find({courseId, psetId, problemId: probId,
+    reviewerId: req.user._id, answerId: {$in: assigned.map(answer => answer._id)}});
+  res.locals.allReviews = res.locals.isStaff
+    ? await Review.find({courseId, psetId, problemId: probId}) : res.locals.usersReviews;
+  const answerIds = res.locals.usersReviews.map(review => review.answerId);
+  res.locals.usersReviewedAnswers = assigned.filter(answer => answerIds.some(id => sameId(id, answer._id)));
+  if (!res.locals.isStaff) res.locals.usersReviewedAnswers = res.locals.usersReviewedAnswers.map(answerContent);
   res.render("showReviewsByUser");
 });
 

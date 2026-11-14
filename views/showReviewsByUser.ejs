@@ -40,6 +40,7 @@
                       }
                     %>
             <li>
+              <% if (isStaff) { %>
               <i class="<%= fa_prefixU %> fa-thumbs-up" id='<%= "reviewU"+j %>' onclick="clickThumb('<%= answer.courseId %>',<%= j %>,'<%= allReviews[j]._id %>','<%= user._id %>','U')"></i>
 
               <i class="<%= fa_prefixD %> fa-thumbs-down" id='<%= "reviewD"+j %>' onclick="clickThumb('<%= answer.courseId %>',<%= j %>,'<%= allReviews[j]._id %>','<%= user._id %>','D')"></i>
@@ -54,6 +55,7 @@
               </i>
 
 
+              <% } %>
               <% if (rev.reviewerId.equals(user._id)) {%>
               YOUR REVIEW!!
               <div style="background:rgb(220,120,255); padding:5px">

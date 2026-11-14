@@ -1,0 +1,17 @@
+<%- include('bootheader') -%>
+<%- include('menubar') -%>
+<div class="container p-4">
+  <h1>Class answers to <%= problem.description %></h1>
+  <pre style="white-space: pre-wrap"><%= problem.problemText %></pre>
+  <% for (const answer of answers) { %>
+    <hr>
+    <% if (answer.imageFilePath) { %>
+      <img src="<%= answer.imageFilePath %>" class="img-fluid" alt="Submitted answer">
+    <% } else { %>
+      <pre style="white-space: pre-wrap"><%= answer.answer %></pre>
+    <% } %>
+  <% } %>
+  <a href="/showProblem/<%= courseId %>/<%= psetId %>/<%= problem._id %>">Back to problem</a>
+</div>
+<%- include('bootfooter') -%>
+<%- include('htmlfoot') -%>

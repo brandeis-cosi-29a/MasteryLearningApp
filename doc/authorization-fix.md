@@ -31,5 +31,19 @@ creation or student-record permissions.
    The HTTP regression suite exercises every mounted route carrying object IDs,
    foreign parents, same-course parent mismatches, and multipart/body/query IDs.
 
+4. **Record actions and peer review:** students can read their own records, or
+   answer content and their own reviews for a server-issued peer assignment in a
+   visible, peer-reviewable PRA problem after submitting their own answer. Staff
+   retain grading and image-replacement privileges in their actual course. Peer
+   reviews cannot become official grades. Class-wide PRA browsing additionally
+   requires completed assigned reviews of two distinct answers; its separate view
+   returns answer content only, with no app-supplied identities, timestamps,
+   grades, or other reviewers' feedback. Text/images may themselves identify their
+   author. These agreed eligibility rules live in `routes/recordAccess.js` so
+   future workflow changes can adjust them in one place.
+   Review deletion remains available to staff; all bulk targets are checked
+   before writes, each affected answer is updated, and deleting its official
+   review clears the copied official grade rather than leaving a dangling grade.
+
 Production deployment and storage configuration are separate from opening this
 PR. No production student records are used by the regression suite.
