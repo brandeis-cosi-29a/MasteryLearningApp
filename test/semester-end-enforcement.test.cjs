@@ -116,6 +116,7 @@ test('a locked source bank stays unavailable to imports even with an approved ow
       `/previewLibraryProblem/${ids.course}/${ids.pset}/${ids.otherProblem}`,
       `/addProblemToPset/${ids.course}/${ids.pset}/${ids.otherProblem}/${ids.skill}`,
     ]) assert.equal((await request(url, {user: ids.owner})).status, 404);
+    assert.equal((await request(`/showProblem/${ids.course}/${ids.pset}/${ids.problem}`, {user: ids.owner})).status, 200, 'destination material stays available');
     db.Course.rows[1].accessDisabled = false;
     assert.equal((await request(`/previewLibraryProblem/${ids.course}/${ids.pset}/${ids.otherProblem}`, {user: ids.owner})).status, 200);
   });
