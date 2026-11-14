@@ -53,7 +53,11 @@ if (!process.env.SESSION_SECRET) {
 This section sets up the AWS S3 storage and the local storage for file uploads.
  *********************************************** */
 
-const upload_to = process.env.UPLOAD_TO; // AWS or LOCAL
+const {validateStorageConfig, verifyPrivateBucket, localImagePath, answerImageUrl} = require('./config/answerStorage');
+validateStorageConfig(process.env);
+const upload_to = process.env.UPLOAD_TO; // AWS, or an explicitly enabled testbed
+const localAnswerRoot = path.join(__dirname, 'private', 'answerImages');
+if (upload_to === 'LOCAL') require('fs').mkdirSync(localAnswerRoot, {recursive: true});
 
 
 let storageAWS = null;
@@ -72,7 +76,7 @@ if (process.env.UPLOAD_TO == "AWS") {
 
   storageAWS = multerS3({
     s3: s3,
-    //acl: 'public-read',
+    acl: 'private',
     bucket: process.env.AWS_BUCKET_NAME,
     key: function (req, file, cb) {
         // req.suffix 
@@ -97,7 +101,7 @@ if (process.env.UPLOAD_TO == "AWS") {
 
 const storageLocal = multer.diskStorage({
   destination: function(req, file, cb) {
-      cb(null, 'public')
+      cb(null, localAnswerRoot)
   },
   filename: function(req, file, cb) {
       // req.suffix 
@@ -254,6 +258,9 @@ db.once("open", function () {
 
 
 var app = express();
+app.locals.answerImageUrl = answerImageUrl;
+app.locals.verifyAnswerStorage = () => verifyPrivateBucket(s3, process.env);
+app.locals.localAnswerTestbed = upload_to === 'LOCAL';
 
 
 
@@ -297,6 +304,15 @@ app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
+// Legacy local answers must never bypass the authenticated image route,
+// including encoded and normalized paths accepted by the static server.
+app.use((req, res, next) => {
+  try {
+    const pathname = path.posix.normalize(decodeURIComponent(req.path).replace(/\\/g, '/'));
+    if (/^\/answerImages(?:\/|$)/i.test(pathname)) return res.sendStatus(404);
+    next();
+  } catch (err) {next(createError(400));}
+});
 app.use(express.static(path.join(__dirname, "public")));
 app.use(cors);
 /*************************************************************************
@@ -323,6 +339,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
 app.use(auth);
 app.use(similarity);
+app.use(require('./routes/answerImages')({s3, env: process.env, localRoot: localAnswerRoot}));
 // app.use(updates); // I don't want to be checking for updates all the time;
 
 
@@ -3491,12 +3508,8 @@ const addImageFilePath = (req,res,next) => {
           ".s3." + process.env.AWS_REGION + ".amazonaws.com/"+
           req.filepath;
       } else {
-        req.filepath=
-          "/answerImages/" +
-          req.params.probId+"_"
-          +req.user._id+"_"
-          +uniqueSuffix+"_";
-        req.urlpath = req.filepath;
+        req.filepath = req.params.probId + '_' + req.user._id + '_' + uniqueSuffix + '_';
+        req.urlpath = 'local:' + req.filepath;
       }
 
       next();
@@ -3612,8 +3625,7 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
               }
             } else {
               try {
-                  let imageFilePath = 
-                    __dirname+"/public/"+answers[0].imageFilePath;
+                  const imageFilePath = localImagePath(answers[0].imageFilePath, localAnswerRoot);
                   if (imageFilePath) {
                     try {
                       await unlinkAsync(imageFilePath);

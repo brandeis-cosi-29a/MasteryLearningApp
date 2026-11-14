@@ -6,7 +6,7 @@
   <% for (const answer of answers) { %>
     <hr>
     <% if (answer.imageFilePath) { %>
-      <img src="<%= answer.imageFilePath %>" class="img-fluid" alt="Submitted answer">
+      <img src="<%= answerImageUrl(answer) %>" class="img-fluid" alt="Submitted answer">
     <% } else { %>
       <pre style="white-space: pre-wrap"><%= answer.answer %></pre>
     <% } %>

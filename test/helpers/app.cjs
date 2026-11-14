@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const {EventEmitter} = require('node:events');
+const {Readable} = require('node:stream');
 const {Types} = require('mongoose');
 const {load} = require('./load.cjs');
 const {models, id} = require('./models.cjs');
@@ -38,6 +39,7 @@ function fixture(options = {}) {
   });
   const similarity = load('routes/similarity.js', {...modelSubstitutes, './authFunctions.js': auth});
   const uploads = [];
+  const imageReads = [];
   class S3 {
     upload(params) {
       const task = new EventEmitter();
@@ -49,7 +51,14 @@ function fixture(options = {}) {
       return task;
     }
     deleteObject() {return {promise: async () => {}};}
+    getPublicAccessBlock() {return {promise: async () => ({PublicAccessBlockConfiguration: {
+      BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true,
+    }})};}
+    getObject(params) {imageReads.push(params.Key); return {createReadStream: () => Readable.from([Buffer.from('synthetic image bytes')])};}
   }
+  const imageRouter = load('routes/answerImages.js', {
+    './authFunctions': auth, './recordAccess': records,
+  });
   const app = load('app.js', {
     ...modelSubstitutes,
     dotenv: {config() {}}, morgan: () => (req, res, next) => next(),
@@ -58,12 +67,12 @@ function fixture(options = {}) {
     'connect-mongo': () => session.MemoryStore,
     './routes/authRouter': authRouter, './routes/similarity': similarity,
     './routes/updatesARCHIVED.js': {}, './routes/authFunctions.js': auth,
-    './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records,
+    './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records, './routes/answerImages': imageRouter,
     ...options.substitutes,
   }, {process: {env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test'}},
     console: {log() {}, error() {}, dir() {}, warn() {}}});
   if (!options.realViews) app.response.render = function(view, locals) {this.json({view, ...this.locals, ...locals});};
-  return {app, db, ids, writes, uploads, auth, scope};
+  return {app, db, ids, writes, uploads, imageReads, auth, scope};
 }
 
 async function serve(app, run) {

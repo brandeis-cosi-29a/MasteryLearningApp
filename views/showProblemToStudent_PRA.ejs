@@ -47,7 +47,7 @@
             <% if (problem.answerMimeType!='image') { %>
                 <pre style="background-color:lightgreen"><%=  usersAnswers[0].answer %></pre>
             <% } else { %>
-                <img src="<%= usersAnswers[0].imageFilePath %>" 
+                <img src="<%= answerImageUrl(usersAnswers[0]) %>"
                 alt="answer picture" 
                 class="img-fluid">
               <% } %>
@@ -149,7 +149,7 @@
                   <% } %>
                  <% }%>
                  <% if (theAnswer.imageFilePath){%>
-                 <img src="<%= theAnswer.imageFilePath %>"
+                 <img src="<%= answerImageUrl(theAnswer) %>"
                       alt="answer picture" 
                       width="100%"
                       >
