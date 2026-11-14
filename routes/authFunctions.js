@@ -167,7 +167,7 @@ const isLoggedIn = async (req, res, next) => {
         if (instructor) {
           next();
         } else {
-          res.send("Only the instructors have access to this page.");
+          res.status(403).send("Only approved instructors have access to this page.");
         }
       }
     } catch (e) {

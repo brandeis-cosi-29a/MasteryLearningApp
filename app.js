@@ -603,7 +603,7 @@ app.get("/createCourse", isLoggedIn, isInstructor,
 
 // rename this to /createCourse and update the ejs form
 
-app.post("/createNewCourse", isLoggedIn,
+app.post("/createNewCourse", isLoggedIn, isInstructor,
   async (req, res, next) => {
 
   if (false && !req.user.googleemail.endsWith("@brandeis.edu")) {
