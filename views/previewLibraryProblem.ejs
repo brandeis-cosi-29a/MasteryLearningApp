@@ -1,0 +1,13 @@
+<%- include('bootheader') -%>
+<%- include('menubar') -%>
+<div class="container p-4">
+  <h1><%= sourceProblem.description %></h1>
+  <p>From <%= sourceCourse.name %></p>
+  <h2>Question</h2>
+  <pre style="white-space: pre-wrap"><%= sourceProblem.problemText %></pre>
+  <h2>Rubric</h2>
+  <pre style="white-space: pre-wrap"><%= sourceProblem.rubric %></pre>
+  <a href="/showProblemLibrary/<%= courseId %>/<%= psetId %>">Back to problem library</a>
+</div>
+<%- include('bootfooter') -%>
+<%- include('htmlfoot') -%>

@@ -1,0 +1,32 @@
+<%- include('bootheader') -%>
+<%- include('menubar') -%>
+<div class="container p-4">
+  <h1>Assigned answer to <%= problem.description %></h1>
+  <pre style="white-space: pre-wrap"><%= problem.problemText %></pre>
+  <% if (answer.imageFilePath) { %>
+    <img src="<%= answerImageUrl(answer) %>" class="img-fluid" alt="Submitted answer">
+  <% } else { %>
+    <pre style="white-space: pre-wrap"><%= answer.answer %></pre>
+  <% } %>
+  <h2>Rubric</h2>
+  <pre style="white-space: pre-wrap"><%= problem.rubric %></pre>
+  <h2>Your reviews</h2>
+  <% for (const review of myReviews) { %>
+    <pre style="white-space: pre-wrap"><%= review.review %></pre>
+  <% } %>
+  <% if (canSubmitReview) { %>
+    <form method="post" action="/saveReview2/<%= courseId %>/<%= psetId %>/<%= problem._id %>/<%= answer._id %>">
+      <% for (const skill of skills) { %>
+        <label><input type="checkbox" name="skill" value="<%= skill._id %>"> <%= skill.shortName %>: <%= skill.name %></label>
+      <% } %>
+      <label>Review <textarea name="review" class="form-control" required></textarea></label>
+      <label><input type="checkbox" name="goodFaithEffort" value="yes"> Good faith effort</label>
+      <input type="hidden" name="destination" value="submit and view this again">
+      <button type="submit" class="btn btn-primary">Submit review</button>
+    </form>
+  <% } %>
+  <a href="/reviewAnswers/<%= courseId %>/<%= psetId %>/<%= problem._id %>">Review another answer</a>
+  <a href="/showProblem/<%= courseId %>/<%= psetId %>/<%= problem._id %>">Back to problem</a>
+</div>
+<%- include('bootfooter') -%>
+<%- include('htmlfoot') -%>

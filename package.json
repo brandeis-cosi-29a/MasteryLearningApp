@@ -7,6 +7,7 @@
   },
   "scripts": {
     "start": "node ./bin/www",
+    "test": "node --test test/*.test.cjs",
     "watch": "nodemon --ext js,mjs,json,ejs,css"
   },
   "dependencies": {
