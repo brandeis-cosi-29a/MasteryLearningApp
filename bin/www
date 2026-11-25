@@ -30,8 +30,12 @@ var server = http.createServer(app);
 app.locals.verifyAnswerStorage().then(() => {
   if (app.locals.localAnswerTestbed) server.listen(port, '127.0.0.1');
   else server.listen(port);
-}).catch(() => {
-  console.error('FATAL: answer storage privacy verification failed. Check storage configuration, bucket public-access blocks, and IAM permissions.');
+}).catch((err) => {
+  // Name the cause (e.g. AccessDenied for a missing s3:GetBucketPublicAccessBlock
+  // permission, NoSuchPublicAccessBlockConfiguration, a wrong region) so the
+  // deploy log says which of the listed checks failed.
+  const cause = `${err?.code || err?.name || 'Error'}: ${err?.message || err}`;
+  console.error(`FATAL: answer storage privacy verification failed. Check storage configuration, bucket public-access blocks, and IAM permissions. Cause: ${cause}`);
   process.exit(1);
 });
 server.on('error', onError);

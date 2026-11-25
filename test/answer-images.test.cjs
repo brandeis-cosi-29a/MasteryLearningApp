@@ -83,18 +83,21 @@ test('server waits for storage privacy and binds local testbeds only to loopback
   for (const mode of ['AWS', 'LOCAL', 'rejected']) {
     let release, reject;
     const verification = new Promise((resolve, fail) => {release = resolve; reject = fail;});
-    const listens = [], exits = [];
+    const listens = [], exits = [], errors = [];
     const server = new EventEmitter();
     server.listen = (...args) => listens.push(args);
     const app = {set() {}, locals: {verifyAnswerStorage: () => verification, localAnswerTestbed: mode === 'LOCAL'}};
     load('bin/www', {'../app': app, http: {createServer: () => server}}, {
       process: {env: {PORT: '5500'}, exit: code => exits.push(code)},
-      console: {error() {}},
+      console: {error(...args) {errors.push(args.join(' '));}},
     });
     assert.equal(listens.length, 0, 'must not listen before verification');
-    if (mode === 'rejected') reject(Error('Bucket not private')); else release();
+    if (mode === 'rejected') reject(Object.assign(Error('Access Denied'), {code: 'AccessDenied'})); else release();
     await new Promise(setImmediate);
-    if (mode === 'rejected') {assert.deepEqual(exits, [1]); assert.equal(listens.length, 0);}
+    if (mode === 'rejected') {
+      assert.deepEqual(exits, [1]); assert.equal(listens.length, 0);
+      assert.match(errors.join('\n'), /FATAL.*Cause: AccessDenied: Access Denied/, 'log names the cause');
+    }
     else assert.equal(JSON.stringify(listens), JSON.stringify([mode === 'LOCAL' ? [5500, '127.0.0.1'] : [5500]]));
   }
 });
