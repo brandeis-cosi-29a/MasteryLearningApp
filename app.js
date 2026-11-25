@@ -12,15 +12,7 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 const {normalizeEmail, findUserByEmail} = require('./config/emailIdentity');
 const logger = require("morgan"); // to log requests to the console
-const showdown  = require('showdown'); // to convert markdown to HTML
-const converter = new showdown.Converter({
-  literalMidWordUnderscores: true,  // Prevents underscores in the middle of words from being parsed as emphasis
-  literalMidWordAsterisks: true,    // Same for asterisks (optional)
-  simplifiedAutoLink: true,         // Optional, but useful for other formatting
-  strikethrough: true,              // Optional
-  tables: true,                     // Optional
-  ghCodeBlocks: true                // Optional
-});
+const {renderMarkdown} = require('./config/markdown');
 
 const multer = require("multer"); // to handle file uploads
 const csv = require('csv-parser')
@@ -1502,7 +1494,7 @@ app.get("/showSkill/:courseId/:skillId", authorize, hasCourseAccess,
     res.locals.isOwner = res.locals.courseInfo.ownerId == req.user.id;
 
     let markdownText = skill.description;
-      markdownText = converter.makeHtml(markdownText);
+      markdownText = renderMarkdown(markdownText);
       const mathjaxScript = 
       `<script type="text/x-mathjax-config">
   MathJax.Hub.Config({
@@ -1513,7 +1505,7 @@ app.get("/showSkill/:courseId/:skillId", authorize, hasCourseAccess,
   });
   </script>
   <script type="text/javascript"
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
   </script>`;
       markdownText = mathjaxScript + markdownText;
     res.locals.markdownText = markdownText;
@@ -3085,7 +3077,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
     
     let markdownText = problem.problemText;
     if (problem.mimeType == 'markdown') {
-      markdownText = converter.makeHtml(markdownText);
+      markdownText = renderMarkdown(markdownText);
       const mathjaxScript = `
 <script type="text/x-mathjax-config">
   MathJax.Hub.Config({
@@ -3096,7 +3088,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
   });
 </script>
 <script type="text/javascript"
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
 </script>
 
 `;
@@ -4904,7 +4896,7 @@ app.get("/showReviewsOfAnswer/:courseId/:psetId/:answerId", authorize, hasCourse
         
   let markdownText = problem.problemText;
   if (problem.mimeType == 'markdown') {
-    markdownText = converter.makeHtml(markdownText);
+    markdownText = renderMarkdown(markdownText);
     const mathjaxScript = 
     `<script type="text/x-mathjax-config">
 MathJax.Hub.Config({
@@ -4915,7 +4907,7 @@ MathJax.Hub.Config({
 });
 </script>
 <script type="text/javascript"
-src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
 </script>`;
     markdownText = mathjaxScript + markdownText;
 
