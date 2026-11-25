@@ -43,15 +43,13 @@ module.exports = function (passport) {
     if (!user) {
       return new User({googleid: profile.id, googleemail: email, googlename: profile.displayName}).save();
     }
-    let changed = user.googleemail !== email;
-    user.googleemail = email;
     if (!user.googleid) {
       user.googleid = profile.id;
       user.googlename = profile.displayName;
-      changed = true;
+      await user.save();
     }
     // Google access/refresh tokens are not used by MLA and must not be stored.
-    if (changed) await user.save();
+    // Preserve the stored email: existing PostedGrades use it as an exact key.
     return user;
   }
 

@@ -23,10 +23,12 @@ not a separate sign-in exception.
 
 ## Identity handling
 
-Emails are trimmed and lowercased for sign-in, admin comparisons, manual student/TA/instructor
-additions, and CSV roster loading. Legacy case or surrounding spaces do not cause a new account:
-the lookup preserves the existing User ID, and an admitted login normalizes that user's email.
-No bulk database migration or account merge is performed.
+Email comparison ignores case and surrounding whitespace for sign-in, admin checks, manual
+student/TA/instructor additions, and CSV roster loading. New users and grade-CSV imports store
+normalized emails. Legacy case or surrounding spaces do not cause a new account: existing
+users retain both their User ID and their stored email byte-for-byte, including when first linked
+to Google. This preserves exact matches to previously saved PostedGrades. No bulk database
+migration, saved-grade rewrite, or account merge is performed.
 
 If multiple Users share a normalized email, sign-in selects a record only when exactly one has
 the same Google subject ID as the authenticated identity. Otherwise sign-in fails. Roster edits

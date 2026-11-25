@@ -2214,7 +2214,7 @@ app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
               row['status'] = 'Graded';
             }
 
-            const email = row.email;
+            const email = normalizeEmail(row.email);
             const name = row.name;
 
 

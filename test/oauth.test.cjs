@@ -5,10 +5,10 @@ const session = require('express-session');
 const {Passport} = require('passport');
 const {load} = require('./helpers/load.cjs');
 const {models, id} = require('./helpers/models.cjs');
-const {serve} = require('./helpers/app.cjs');
+const {fixture: courseFixture, serve} = require('./helpers/app.cjs');
 
-function fixture(env = {}) {
-  const {db, writes} = models();
+function fixture(env = {}, storage = models()) {
+  const {db, writes} = storage;
   const passport = new Passport();
   const configure = load('config/passport.js', {
     '../models/User': db.User, '../models/CourseMember': db.CourseMember,
@@ -105,12 +105,44 @@ test('personal Google accounts with membership records retain their user IDs and
     f.db.CourseMember.rows.push({_id: id(2), studentId: id(1), courseId: id(3), role});
     const user = await f.verify(identity({email: 'roster.user+tag@gmail.com', hd: undefined}));
     assert.equal(String(user._id), String(id(1)), role);
-    assert.equal(user.googleemail, 'roster.user+tag@gmail.com');
+    assert.equal(user.googleemail, ' Roster.User+Tag@Gmail.COM ');
     assert.equal(user.googleid, 'synthetic-google-id');
     assert.equal(user.googletoken, undefined);
     assert.equal(f.db.User.rows.length, 1);
     assert.equal(f.db.CourseMember.rows[0].role, role, 'admission must not change course access');
     assert(f.writes.every(([model]) => model === 'User'));
+  }
+});
+
+test('legacy email remains byte-for-byte unchanged at login so saved student grades still resolve', async () => {
+  for (const linked of [false, true]) {
+    const course = courseFixture();
+    const f = fixture({}, course);
+    const email = ' Legacy.Student@Gmail.COM ';
+    const student = f.db.User.rows.find(row => String(row._id) === String(course.ids.student));
+    student.googleemail = email;
+    if (linked) student.googleid = 'synthetic-google-id';
+    f.db.PostedGrades.rows.push({_id: id(800), courseId: course.ids.course, examId: course.ids.pset,
+      email, name: 'Legacy Student', skillsMastered: ['F1'], skillsSkipped: []});
+    const beforeGrades = JSON.stringify(f.db.PostedGrades.rows);
+    const user = await f.verify(identity({email: 'legacy.student@gmail.com', hd: undefined}));
+    assert.equal(user.googleemail, email);
+    assert.equal(student.googleemail, email);
+    assert.equal(f.db.User.rows.find(row => String(row._id) === user.id).googleemail, email);
+    assert.equal(user.googleid, 'synthetic-google-id');
+    if (linked) assert.deepEqual(f.writes, [], 'an already-linked user needs no login writes');
+    await serve(course.app, async request => {
+      const response = await request(`/showCourseToStudent/${course.ids.course}`, {user: user._id});
+      assert.equal(response.status, 200);
+      const view = await response.json();
+      assert.equal(view.email, email);
+      assert.equal(view.grades.length, 1);
+      assert.equal(view.grades[0].email, email);
+      assert.equal(view.grades[0].examId._id, String(course.ids.pset));
+      assert.deepEqual(view.skillsMastered, ['F1']);
+      assert.equal(view.skillCounts.F1, 1);
+    });
+    assert.equal(JSON.stringify(f.db.PostedGrades.rows), beforeGrades, 'login and grade reads never rewrite saved grades');
   }
 });
 
