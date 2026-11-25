@@ -144,6 +144,9 @@ ownership of the domain in Google Search Console).
 
 ### Express and request parsing
 
+Before merging the browser asset cleanup, complete the
+[visual and interaction review](browser-asset-review.md) against its parent.
+
 The application serves its own browser clients and does not enable cross-origin
 API access. Google OAuth uses top-level redirects and does not require CORS.
 
