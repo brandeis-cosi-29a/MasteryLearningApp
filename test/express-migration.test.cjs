@@ -23,6 +23,26 @@ test('errors after headers are sent reach the next handler without writing anoth
   });
 });
 
+test('cross-origin requests receive no CORS grant while ordinary application requests remain usable', async () => {
+  const f = fixture();
+  await serve(f.app, async request => {
+    const ordinary = await request('/stats', {user: f.ids.owner});
+    assert.equal(ordinary.status, 200);
+    const crossOrigin = await request('/stats', {user: f.ids.owner,
+      headers: {origin: 'https://unrelated.example.test'}});
+    assert.equal(crossOrigin.status, 200);
+    assert.equal(crossOrigin.headers.get('access-control-allow-origin'), null);
+    const preflight = await request(`/saveAnswer/${f.ids.course}/${f.ids.pset}/${f.ids.problem}`, {
+      method: 'OPTIONS', user: f.ids.student,
+      headers: {origin: 'https://unrelated.example.test', 'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type'},
+    });
+    assert.equal(preflight.headers.get('access-control-allow-origin'), null);
+    assert.equal(preflight.headers.get('access-control-allow-credentials'), null);
+  });
+  assert.deepEqual(f.writes, []);
+});
+
 test('rejected async model calls reach the application error page and leave the server usable', async () => {
   for (const environment of ['production', 'test']) {
     const f = fixture({realViews: true});

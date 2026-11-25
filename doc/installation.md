@@ -144,6 +144,9 @@ ownership of the domain in Google Search Console).
 
 ### Express and request parsing
 
+The application serves its own browser clients and does not enable cross-origin
+API access. Google OAuth uses top-level redirects and does not require CORS.
+
 MLA uses Express 5's built-in JSON and URL-encoded parsers (backed by body-parser 2).
 Forms and JSON are parsed once,
 before authentication, with the existing default 100 KiB limit and

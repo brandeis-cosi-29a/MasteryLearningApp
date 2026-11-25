@@ -22,7 +22,6 @@ const {zipSync, strToU8} = require('fflate'); // to create zip files of personal
 
 const {S3Client, DeleteObjectCommand} = require('@aws-sdk/client-s3');
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
-const cors = require("cors")(); // to allow cross-origin requests
 const ejs = require('ejs'); // to render ejs templates
 
 
