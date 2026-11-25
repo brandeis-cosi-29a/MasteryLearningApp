@@ -4,6 +4,7 @@ const {fixture, serve} = require('./helpers/app.cjs');
 const {id} = require('./helpers/models.cjs');
 const {load} = require('./helpers/load.cjs');
 const {EventEmitter} = require('node:events');
+const {Readable} = require('node:stream');
 const {validateStorageConfig, verifyPrivateBucket, objectKey, localImagePath} = require('../config/answerStorage');
 
 test('answer images require actual record permission before any storage read', async () => {
@@ -54,17 +55,73 @@ test('image route retains assigned-peer and approved class-browsing access', asy
   });
 });
 
+test('SDK image request and stream failures return unavailable without exposing S3 errors', async () => {
+  for (const failure of ['NoSuchKey', 'AccessDenied', 'stream']) {
+    const {app, ids} = fixture({s3Response: request => {
+      if (request.method !== 'GET') return;
+      if (failure === 'stream') return {statusCode: 200, headers: {},
+        body: new Readable({read() {this.destroy(Error('Synthetic stream failure'));}})};
+      return {statusCode: failure === 'NoSuchKey' ? 404 : 403, headers: {},
+        body: Readable.from([`<Error><Code>${failure}</Code><Message>Synthetic provider detail</Message></Error>`])};
+    }});
+    await serve(app, async request => {
+      const response = await request(`/answerImage/${ids.course}/${ids.answer}`, {user: ids.classmate});
+      assert.equal(response.status, 404);
+      assert(!(await response.text()).includes('Synthetic provider detail'));
+    });
+  }
+});
+
+test('an S3 response arriving after the browser disconnects releases its body stream', async () => {
+  let handler;
+  const router = {get(path, ...handlers) {handler = handlers.at(-1);}};
+  const answerImages = load('routes/answerImages.js', {
+    express: {Router: () => router}, './authFunctions': {},
+    './recordAccess': {canReadAnswer: async () => true},
+  });
+  const body = new Readable({read() {}});
+  const res = {destroyed: false};
+  const env = {UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1'};
+  answerImages({env, s3: {send: async () => {
+    res.destroyed = true;
+    return {Body: body};
+  }}});
+  await handler({courseScope: {answer: {imageFilePath: 'https://test-bucket.s3.us-east-1.amazonaws.com/studentImages/test.png'}}},
+    res, error => {throw error;});
+  assert(body.destroyed);
+});
+
+test('startup privacy verification uses the configured SDK region and fails closed on S3 errors', async () => {
+  const {app, s3} = fixture({env: {AWS_REGION: 'eu-west-2', AWS_BUCKET_NAME: 'synthetic-private-bucket',
+    AWS_ACCESS_KEY_ID: 'synthetic-app-key', AWS_SECRET_ACCESS_KEY: 'synthetic-app-secret'}});
+  await app.locals.verifyAnswerStorage();
+  assert.equal(s3.clientConfigs[0].region, 'eu-west-2');
+  assert.equal(s3.clientConfigs[0].credentials.accessKeyId, 'synthetic-app-key');
+  assert.equal(s3.clientConfigs[0].credentials.secretAccessKey, 'synthetic-app-secret');
+  assert.equal(s3.requests[0].hostname, 'synthetic-private-bucket.s3.eu-west-2.amazonaws.com');
+  assert('publicAccessBlock' in s3.requests[0].query);
+  for (const body of ['<PublicAccessBlockConfiguration/>', '<Error><Code>AccessDenied</Code></Error>']) {
+    const failed = fixture({s3Response: () => ({statusCode: body.includes('Error') ? 403 : 200,
+      headers: {}, body: Readable.from([body])})});
+    await assert.rejects(failed.app.locals.verifyAnswerStorage());
+  }
+});
+
 test('production requires private S3 storage; local storage is explicit testbed-only', async () => {
   const aws = {UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1'};
   const flags = {BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true};
-  const s3 = {getPublicAccessBlock: () => ({promise: async () => ({PublicAccessBlockConfiguration: flags})})};
+  const s3 = {send: async command => {
+    assert.equal(command.constructor.name, 'GetPublicAccessBlockCommand');
+    assert.equal(command.input.Bucket, aws.AWS_BUCKET_NAME);
+    return {PublicAccessBlockConfiguration: flags};
+  }};
   await verifyPrivateBucket(s3, aws);
   for (const flag of Object.keys(flags)) {
     flags[flag] = false;
     await assert.rejects(verifyPrivateBucket(s3, aws), /four S3/);
     flags[flag] = true;
   }
-  await assert.rejects(verifyPrivateBucket({getPublicAccessBlock: () => ({promise: async () => {throw Error('AccessDenied');}})}, aws));
+  await assert.rejects(verifyPrivateBucket({send: async () => {throw Error('AccessDenied');}}, aws));
   assert.throws(() => validateStorageConfig({NODE_ENV: 'production'}));
   assert.throws(() => validateStorageConfig({UPLOAD_TO: 'typo', NODE_ENV: 'development'}));
   assert.throws(() => validateStorageConfig({UPLOAD_TO: 'LOCAL', NODE_ENV: 'production', ALLOW_LOCAL_ANSWER_STORAGE: 'true'}));

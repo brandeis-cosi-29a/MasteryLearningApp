@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const createError = require('http-errors');
+const {GetObjectCommand} = require('@aws-sdk/client-s3');
 const {authorize, hasCourseAccess} = require('./authFunctions');
 const {canReadAnswer, canBrowseAnswers} = require('./recordAccess');
 const {objectKey, localImagePath} = require('../config/answerStorage');
@@ -18,11 +19,14 @@ module.exports = function answerImages({s3, env, localRoot}) {
       if (env.UPLOAD_TO === 'AWS') {
         const key = objectKey(answer.imageFilePath, env);
         filename = key;
-        stream = s3.getObject({Bucket: env.AWS_BUCKET_NAME, Key: key}).createReadStream();
+        const object = await s3.send(new GetObjectCommand({Bucket: env.AWS_BUCKET_NAME, Key: key}));
+        stream = object.Body;
       } else {
         filename = localImagePath(answer.imageFilePath, localRoot);
         stream = fs.createReadStream(filename);
       }
+      // The browser may disconnect while the SDK is awaiting S3 response headers.
+      if (res.destroyed) {stream.destroy(); return;}
       const types = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
         '.gif': 'image/gif', '.webp': 'image/webp', '.heic': 'image/heic', '.avif': 'image/avif'};
       res.set({

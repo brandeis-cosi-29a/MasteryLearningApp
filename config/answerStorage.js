@@ -1,4 +1,5 @@
 const path = require('node:path');
+const {GetPublicAccessBlockCommand} = require('@aws-sdk/client-s3');
 const PRIVATE_FLAGS = ['BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets'];
 
 function validateStorageConfig(env) {
@@ -16,7 +17,7 @@ async function verifyPrivateBucket(s3, env) {
   if (env.UPLOAD_TO === 'LOCAL') return;
   // Require bucket-level protection, including controls that override pre-existing
   // public ACLs/policies. A missing permission/configuration fails startup closed.
-  const result = await s3.getPublicAccessBlock({Bucket: env.AWS_BUCKET_NAME}).promise();
+  const result = await s3.send(new GetPublicAccessBlockCommand({Bucket: env.AWS_BUCKET_NAME}));
   if (!PRIVATE_FLAGS.every(flag => result.PublicAccessBlockConfiguration?.[flag] === true)) {
     throw Error('Answer-image bucket must enable all four S3 Block Public Access settings.');
   }

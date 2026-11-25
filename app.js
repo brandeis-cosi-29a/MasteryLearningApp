@@ -30,7 +30,7 @@ const fsPromises = require('fs').promises; // to read files asynchronously
 
 const {zipSync, strToU8} = require('fflate'); // to create zip files of personalized exams
 
-const aws = require('aws-sdk'); //"^2.2.41" to interact with AWS S3 for file uploads
+const {S3Client, DeleteObjectCommand} = require('@aws-sdk/client-s3');
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
 const cors = require("cors")(); // to allow cross-origin requests
 const ejs = require('ejs'); // to render ejs templates
@@ -66,14 +66,13 @@ let storageAWS = null;
 let s3="";
 
 if (process.env.UPLOAD_TO == "AWS") {
-  const aws_config = {
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  s3 = new S3Client({
     region: process.env.AWS_REGION,
-  };
-  aws.config.update(aws_config);
-
-  s3 = new aws.S3();
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+  });
 
   storageAWS = multerS3({
     s3: s3,
@@ -472,10 +471,10 @@ const deleteStudentData = async (courseId) => {
             try {
                 // remove the https://domain_name/ from the imageFilePath to get the key
                 const imageKey = answer.imageFilePath.split("/").slice(3).join("/");
-                await s3.deleteObject({
+                await s3.send(new DeleteObjectCommand({
                   Bucket: process.env.AWS_BUCKET_NAME,
                   Key: imageKey
-                }).promise();
+                }));
               } catch (e) {
                 console.error(`error deleting AWS file ${answer.imageFilePath}`);
                 console.error(`with key ${imageKey}`);
@@ -3621,10 +3620,11 @@ app.post("/uploadAnswerPhoto/:courseId/:psetId/:probId",
                 let imageFilePath = answers[0].imageFilePath;
                 if (imageFilePath) {
                   let key = imageFilePath.split('//').slice(-1)[0];
-                  await s3.deleteObject({
+                  // Preserve the legacy replacement key; deleting old images is a separate change.
+                  await s3.send(new DeleteObjectCommand({
                     Bucket: process.env.AWS_BUCKET_NAME,
                     Key: key
-                  }).promise();
+                  }));
                  }
               } catch(e){
                 console.error('error deleting AWS file: ', e);

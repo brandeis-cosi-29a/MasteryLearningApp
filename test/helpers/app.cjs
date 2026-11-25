@@ -1,7 +1,8 @@
 const express = require('express');
 const session = require('express-session');
 const {EventEmitter} = require('node:events');
-const {Readable} = require('node:stream');
+const s3Sdk = require('@aws-sdk/client-s3');
+const {storage} = require('./s3.cjs');
 const {Types} = require('mongoose');
 const {load} = require('./load.cjs');
 const {models, id} = require('./models.cjs');
@@ -38,29 +39,8 @@ function fixture(options = {}) {
     next();
   });
   const similarity = load('routes/similarity.js', {...modelSubstitutes, './authFunctions.js': auth});
-  const uploads = [];
-  const imageReads = [];
-  const imageObjects = new Map();
-  class S3 {
-    upload(params) {
-      const task = new EventEmitter();
-      task.send = cb => {
-        const chunks = [];
-        params.Body.on('data', chunk => chunks.push(chunk));
-        params.Body.on('end', () => {const bytes = Buffer.concat(chunks); uploads.push(params.Key); imageObjects.set(params.Key, bytes); task.emit('httpUploadProgress', {total: bytes.length}); cb(null, {Location: `https://test-bucket.s3.us-east-1.amazonaws.com/${params.Key}`});});
-      };
-      return task;
-    }
-    deleteObject(params, callback) {
-      const remove = () => {imageObjects.delete(params.Key); return {};};
-      if (callback) callback(null, remove());
-      return {promise: async () => remove()};
-    }
-    getPublicAccessBlock() {return {promise: async () => ({PublicAccessBlockConfiguration: {
-      BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true,
-    }})};}
-    getObject(params) {imageReads.push(params.Key); return {createReadStream: () => Readable.from([imageObjects.get(params.Key) || Buffer.from('synthetic image bytes')])};}
-  }
+  const s3 = storage(options);
+  const {uploads, imageReads, imageObjects} = s3;
   const imageRouter = load('routes/answerImages.js', {
     './authFunctions': auth, './recordAccess': records,
   });
@@ -68,7 +48,7 @@ function fixture(options = {}) {
     ...modelSubstitutes,
     dotenv: {config() {}}, morgan: () => (req, res, next) => next(),
     mongoose: {Types, connect: () => Promise.resolve(), connection: new EventEmitter()},
-    'aws-sdk': {config: {update() {}}, S3},
+    '@aws-sdk/client-s3': {...s3Sdk, S3Client: s3.S3Client},
     'connect-mongo': () => session.MemoryStore,
     './routes/authRouter': authRouter, './routes/similarity': similarity,
     './routes/updatesARCHIVED.js': {}, './routes/authFunctions.js': auth,
@@ -77,7 +57,7 @@ function fixture(options = {}) {
   }, {process: {env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test', ...options.env}},
     console: {log() {}, error() {}, dir() {}, warn() {}}});
   if (!options.realViews) app.response.render = function(view, locals) {this.json({view, ...this.locals, ...locals});};
-  return {app, db, ids, writes, uploads, imageReads, imageObjects, auth, scope};
+  return {app, db, ids, writes, uploads, imageReads, imageObjects, auth, scope, s3};
 }
 
 async function serve(app, run) {
