@@ -235,7 +235,6 @@ const SupportFile = require("./models/SupportFile.js");
 const RegradeRequest = require("./models/RegradeRequest");
 const PostedGrades = require("./models/PostedGrades.js");
 const Instructor = require("./models/Instructor");
-//const ejsLint = require("ejs-lint");
 
 
 
@@ -942,7 +941,7 @@ app.post("/uploadRoster/:courseId",
 
   streamifier
     .createReadStream(buffer)
-    .pipe(csv()) //.parse({ headers: true, ignoreEmpty: true })) // <== this is @fast-csv/parse!!
+    .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
     })
@@ -2197,7 +2196,7 @@ app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
 
   streamifier
     .createReadStream(buffer)
-    .pipe(csv()) //.parse({ headers: true, ignoreEmpty: true })) // <== this is @fast-csv/parse!!
+    .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
     })
