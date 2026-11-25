@@ -62,7 +62,9 @@ function fixture(options = {}) {
 }
 
 async function serve(app, run) {
-  const server = await new Promise(resolve => {const s = app.listen(0, '127.0.0.1', () => resolve(s));});
+  const server = await new Promise((resolve, reject) => {
+    const s = app.listen(0, '127.0.0.1', error => error ? reject(error) : resolve(s));
+  });
   const request = (url, {user, method = 'GET', body, headers = {}} = {}) => fetch(`http://127.0.0.1:${server.address().port}${url}`, {
     method, redirect: 'manual', signal: AbortSignal.timeout(5000),
     headers: {...(user ? {'x-test-user': String(user)} : {}), ...headers}, body,

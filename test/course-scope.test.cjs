@@ -5,7 +5,7 @@ const {id} = require('./helpers/models.cjs');
 
 test('mounted routes keep course authorization and source-sharing checks explicit', () => {
   const {app, auth} = fixture();
-  const routes = app._router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
+  const routes = app.router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
   const recognized = new Set(['courseId', 'psetId', 'examId', 'probId', 'answerId',
     'reviewId', 'requestId', 'regradeRequestId', 'skillId', 'studentId', 'userId',
     'sourceProblemId', 'otherCourseId']);
@@ -25,7 +25,7 @@ test('mounted routes keep course authorization and source-sharing checks explici
 
 test('all mounted course routes reject foreign URL objects before handlers run', async () => {
   const {app, ids, writes, uploads} = fixture();
-  const routes = app._router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
+  const routes = app.router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
   const foreign = {psetId: 'otherPset', examId: 'otherPset', probId: 'otherProblem', answerId: 'otherAnswer', reviewId: 'otherReview', requestId: 'otherRequest', regradeRequestId: 'otherRequest', skillId: 'otherSkill', studentId: 'outsider'};
   const own = {courseId: 'course', psetId: 'pset', examId: 'pset', probId: 'problem', answerId: 'answer', reviewId: 'review', requestId: 'request', regradeRequestId: 'request', skillId: 'skill', studentId: 'classmate', userId: 'owner', sourceProblemId: 'otherProblem', otherCourseId: 'otherCourse'};
   let checks = 0;

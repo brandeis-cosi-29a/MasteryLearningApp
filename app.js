@@ -319,8 +319,8 @@ app.set("view engine", "ejs");
 app.disable('etag'); // get rid of 304 error?
 
 app.use(logger("dev"));
-app.use(express.json());
-app.use(express.urlencoded({extended: false}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: false}));
 app.use(cookieParser());
 // Legacy local answers must never bypass the authenticated image route,
 // including encoded and normalized paths accepted by the static server.
@@ -353,8 +353,6 @@ app.use(flash());
 
 app.use('/fontawesome', express.static(path.join(__dirname, 'node_modules/@fortawesome/fontawesome-free')));
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: false}));
 app.use(auth);
 app.use(similarity);
 app.use(require('./routes/answerImages')({s3, env: process.env, localRoot: localAnswerRoot}));
@@ -4981,6 +4979,7 @@ app.use(function (err, req, res, next) {
   // render the error page
   res.status(err.status || 500);
   res.locals.user= req.user||{}
+  res.locals.loggedIn = !!req.user; // Parser errors can arrive before authentication middleware.
   res.render("error");
 });
 

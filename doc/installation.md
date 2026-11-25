@@ -142,6 +142,29 @@ ownership of the domain in Google Search Console).
 
 ## Deploying to the cloud
 
+### Express and request parsing
+
+MLA uses Express 5 and body-parser 2. JSON and URL-encoded forms are parsed once,
+before authentication, with the existing default 100 KiB limit and
+`extended: false`. Multipart uploads still use multer and their separate limits.
+Parser errors render the application error page with their 400/413 status even
+when authentication has not run. Rejected promises returned by async handlers
+now reach the application error handler automatically.
+
+Express 5's simple query parser handles MLA's flat selectors (`studentEmail`,
+`theStudentId`, `makeupId`, `csv`, `json`, `personal`). Bracket notation no longer
+creates nested query objects. Repeated keys remain arrays; identity selectors
+must still be single values. The app does not mutate `req.query`. An unparsed
+body is `undefined`; callers must send the form or JSON content type expected
+by the route. Existing browser forms and course content need no edits.
+
+After deployment, check Google login/logout, student answer text and photo
+uploads, staff image replacement, roster/grade CSV imports, exam ZIP downloads,
+and JSON/CSV views in a test course. Confirm scripts, styles and Font Awesome
+fonts load; static JavaScript is now served as `text/javascript`. Error and
+missing-route pages must return their proper statuses. See the upstream
+[Express 5 migration guide](https://expressjs.com/en/guide/migrating-5/).
+
 ### MongoDB and sessions
 
 MLA uses Mongoose 8 and connect-mongo 5 with the MongoDB 6 driver. The session
