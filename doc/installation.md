@@ -144,7 +144,8 @@ ownership of the domain in Google Search Console).
 
 ### Express and request parsing
 
-MLA uses Express 5 and body-parser 2. JSON and URL-encoded forms are parsed once,
+MLA uses Express 5's built-in JSON and URL-encoded parsers (backed by body-parser 2).
+Forms and JSON are parsed once,
 before authentication, with the existing default 100 KiB limit and
 `extended: false`. Multipart uploads still use multer and their separate limits.
 Parser errors render the application error page with their 400/413 status even
