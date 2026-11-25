@@ -28,7 +28,7 @@ const streamifier = require("streamifier"); // to convert a buffer to a stream f
 
 const fsPromises = require('fs').promises; // to read files asynchronously
 
-const {ZipArchive} = require('archiver'); // to create zip files of personalized exams
+const {zipSync, strToU8} = require('fflate'); // to create zip files of personalized exams
 
 const aws = require('aws-sdk'); //"^2.2.41" to interact with AWS S3 for file uploads
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
@@ -2695,32 +2695,25 @@ const generateTex = (problems) => {
         res.setHeader('Content-Disposition', 'attachment; filename=files.zip');
     
 
-        // Create zip archive
-        const archive = new ZipArchive({
-            zlib: { level: 9 } // Maximum compression
-        });
-    
-        // Pipe archive data to response
-        archive.pipe(res);
+        // Collect UTF-8 file contents for the in-memory ZIP archive.
+        const files = {};
     
         // Add each file to the archive
         result.forEach(file => {
           console.log(file.filename);
-            archive.append(file.filecontents, { name: "exam_"+file.filename });
+            files["exam_"+file.filename] = strToU8(file.filecontents);
         });
 
-        archive.append(JSON.stringify(studentsWithFullMastery,null,5), { name: "studentsWithFullMastery.json" });  
+        files["studentsWithFullMastery.json"] = strToU8(JSON.stringify(studentsWithFullMastery,null,5));
         // get preamble and title files and add to archive
         const preamble = await SupportFile.findOne({courseId,name:'preamble'});
         const title = await SupportFile.findOne({courseId,name:'title'});
-        archive.append( preamble.get('text',""), {name: "preamble.tex"});
-        archive.append(title.get('text',""), { name: "title.tex" });
+        files["preamble.tex"] = strToU8(preamble.get('text',""));
+        files["title.tex"] = strToU8(title.get('text',""));
 
         // add compile shell script to archive
-        archive.append(`mkdir originals;mkdir exams;mv *.tex *.txt *.json *.sh originals;cd originals;for file in exam_*.tex; do pdflatex "$file"; done;mv *.pdf ../exams;mv *.tex *.sh *.txt *.json ..; cd ..; rm -r originals`,
-          { name: "compile.sh" }
-        );
-        archive.append(`Instuctions:
+        files["compile.sh"] = strToU8(`mkdir originals;mkdir exams;mv *.tex *.txt *.json *.sh originals;cd originals;for file in exam_*.tex; do pdflatex "$file"; done;mv *.pdf ../exams;mv *.tex *.sh *.txt *.json ..; cd ..; rm -r originals`);
+        files["readme.txt"] = strToU8(`Instuctions:
           This zip file contains a personalized exam for each student in the course.
           Each exam contains only the problems for the skills that the student has not yet mastered.
           The file studentsWithFullMastery.json contains a list of students who have already mastered all of the skills.
@@ -2743,17 +2736,15 @@ const generateTex = (problems) => {
           \\documentclass{article}
           \\usepackage{luatexja}
 
-          `, { name: "readme.txt" });
+          `);
          
 
-        // Handle archive errors
-        archive.on('error', (err) => {
+        try {
+            res.send(Buffer.from(zipSync(files, {level: 9})));
+        } catch (err) {
             console.error('Archive error:', err);
             res.status(500).end();
-        });
-    
-        // Finalize the archive
-        archive.finalize();
+        }
 
       });
   
@@ -2811,30 +2802,23 @@ const generateTex = (problems) => {
           res.setHeader('Content-Disposition', 'attachment; filename=fullExam.zip');
       
   
-          // Create zip archive
-          const archive = new ZipArchive({
-              zlib: { level: 9 } // Maximum compression
-          });
-      
-          // Pipe archive data to response
-          archive.pipe(res);
+          // Collect UTF-8 file contents for the in-memory ZIP archive.
+          const files = {};
       
           // Add each file to the archive
           result.forEach(file => {
-              archive.append(file.filecontents, { name: "exam_"+file.filename });
+              files["exam_"+file.filename] = strToU8(file.filecontents);
           });
   
           // get preamble and title files and add to archive
           const preamble = await SupportFile.findOne({courseId,name:'preamble'});
           const title = await SupportFile.findOne({courseId,name:'title'});
-          archive.append( preamble.get('text',""), {name: "preamble.tex"});
-          archive.append(title.get('text',""), { name: "title.tex" });
+          files["preamble.tex"] = strToU8(preamble.get('text',""));
+          files["title.tex"] = strToU8(title.get('text',""));
   
           // add compile shell script to archive
-          archive.append(`mkdir originals;mkdir exams;mv *.tex *.txt *.json *.sh originals;cd originals;for file in exam_*.tex; do pdflatex "$file"; done;mv *.pdf ../exams;mv *.tex *.sh *.txt *.json ..; cd ..; rm -r originals`,
-            { name: "compile.sh" }
-          );
-          archive.append(`Instuctions:
+          files["compile.sh"] = strToU8(`mkdir originals;mkdir exams;mv *.tex *.txt *.json *.sh originals;cd originals;for file in exam_*.tex; do pdflatex "$file"; done;mv *.pdf ../exams;mv *.tex *.sh *.txt *.json ..; cd ..; rm -r originals`);
+          files["readme.txt"] = strToU8(`Instuctions:
             This zip file contains a personalized exam for each student in the course.
             Each exam contains only the problems for the skills that the student has not yet mastered.
             The file studentsWithFullMastery.json contains a list of students who have already mastered all of the skills.
@@ -2857,17 +2841,15 @@ const generateTex = (problems) => {
             \\documentclass{article}
             \\usepackage{luatexja}
   
-            `, { name: "readme.txt" });
+            `);
            
   
-          // Handle archive errors
-          archive.on('error', (err) => {
+          try {
+              res.send(Buffer.from(zipSync(files, {level: 9})));
+          } catch (err) {
               console.error('Archive error:', err);
               res.status(500).end();
-          });
-      
-          // Finalize the archive
-          archive.finalize();
+          }
   
         });
     
