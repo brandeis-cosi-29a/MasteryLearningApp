@@ -105,7 +105,7 @@ test('personal Google accounts with membership records retain their user IDs and
     f.db.CourseMember.rows.push({_id: id(2), studentId: id(1), courseId: id(3), role});
     const user = await f.verify(identity({email: 'roster.user+tag@gmail.com', hd: undefined}));
     assert.equal(String(user._id), String(id(1)), role);
-    assert.equal(user.googleemail, ' Roster.User+Tag@Gmail.COM ');
+    assert.equal(user.googleemail, 'roster.user+tag@gmail.com');
     assert.equal(user.googleid, 'synthetic-google-id');
     assert.equal(user.googletoken, undefined);
     assert.equal(f.db.User.rows.length, 1);
@@ -114,35 +114,40 @@ test('personal Google accounts with membership records retain their user IDs and
   }
 });
 
-test('legacy email remains byte-for-byte unchanged at login so saved student grades still resolve', async () => {
+test('admitted legacy accounts normalize on login and resolve canonical student grades', async () => {
   for (const linked of [false, true]) {
     const course = courseFixture();
     const f = fixture({}, course);
     const email = ' Legacy.Student@Gmail.COM ';
+    const normalizedEmail = 'legacy.student@gmail.com';
     const student = f.db.User.rows.find(row => String(row._id) === String(course.ids.student));
     student.googleemail = email;
     if (linked) student.googleid = 'synthetic-google-id';
     f.db.PostedGrades.rows.push({_id: id(800), courseId: course.ids.course, examId: course.ids.pset,
-      email, name: 'Legacy Student', skillsMastered: ['F1'], skillsSkipped: []});
+      email: normalizedEmail, name: 'Legacy Student', skillsMastered: ['F1'], skillsSkipped: []});
     const beforeGrades = JSON.stringify(f.db.PostedGrades.rows);
-    const user = await f.verify(identity({email: 'legacy.student@gmail.com', hd: undefined}));
-    assert.equal(user.googleemail, email);
-    assert.equal(student.googleemail, email);
-    assert.equal(f.db.User.rows.find(row => String(row._id) === user.id).googleemail, email);
+    const beforeMembers = JSON.stringify(f.db.CourseMember.rows);
+    const user = await f.verify(identity({email: normalizedEmail, hd: undefined}));
+    assert.equal(user.googleemail, normalizedEmail);
+    assert.equal(user.id, String(course.ids.student));
+    assert.equal(f.db.User.rows.find(row => String(row._id) === user.id).googleemail, normalizedEmail);
     assert.equal(user.googleid, 'synthetic-google-id');
-    if (linked) assert.deepEqual(f.writes, [], 'an already-linked user needs no login writes');
+    assert.deepEqual(f.writes, [['User', 'save']], 'both linked and unlinked legacy accounts save their normalized email');
+    await f.verify(identity({email: normalizedEmail, hd: undefined}));
+    assert.deepEqual(f.writes, [['User', 'save']], 'a later login needs no redundant save');
     await serve(course.app, async request => {
       const response = await request(`/showCourseToStudent/${course.ids.course}`, {user: user._id});
       assert.equal(response.status, 200);
       const view = await response.json();
-      assert.equal(view.email, email);
+      assert.equal(view.email, normalizedEmail);
       assert.equal(view.grades.length, 1);
-      assert.equal(view.grades[0].email, email);
+      assert.equal(view.grades[0].email, normalizedEmail);
       assert.equal(view.grades[0].examId._id, String(course.ids.pset));
       assert.deepEqual(view.skillsMastered, ['F1']);
       assert.equal(view.skillCounts.F1, 1);
     });
     assert.equal(JSON.stringify(f.db.PostedGrades.rows), beforeGrades, 'login and grade reads never rewrite saved grades');
+    assert.equal(JSON.stringify(f.db.CourseMember.rows), beforeMembers, 'normalization preserves memberships and roles');
   }
 });
 

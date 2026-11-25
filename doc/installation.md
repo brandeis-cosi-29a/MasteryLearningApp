@@ -126,9 +126,9 @@ or an email matching `ADMIN_EMAIL`. An existing User row alone does not admit an
 Instructor approval and course permissions are checked separately after sign-in.
 
 Email comparison ignores case and surrounding whitespace. New users store normalized emails;
-existing users retain their IDs, stored email values, and course records so saved grades keep
-matching. Grade-CSV imports normalize email case and surrounding whitespace. Duplicate email
-records resolve only when exactly one has the authenticated Google subject ID; unresolved
+admitted existing users normalize their stored email at login while retaining their IDs and
+course records. Grade-CSV imports also normalize email case and surrounding whitespace.
+Duplicate email records resolve only when exactly one has the authenticated Google subject ID; unresolved
 duplicates need administrator assistance. See [OAuth admission and validation](oauth-hardening.md)
 for upgrade checks.
 

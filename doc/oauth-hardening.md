@@ -25,10 +25,13 @@ not a separate sign-in exception.
 
 Email comparison ignores case and surrounding whitespace for sign-in, admin checks, manual
 student/TA/instructor additions, and CSV roster loading. New users and grade-CSV imports store
-normalized emails. Legacy case or surrounding spaces do not cause a new account: existing
-users retain both their User ID and their stored email byte-for-byte, including when first linked
-to Google. This preserves exact matches to previously saved PostedGrades. No bulk database
-migration, saved-grade rewrite, or account merge is performed.
+normalized emails. An admitted login also normalizes an existing user's stored email while
+preserving the User ID and memberships. Denied logins do not change stored emails. No bulk
+database migration, saved-grade rewrite, or account merge is performed.
+
+Grade matching uses normalized email values. Historical PostedGrades with non-normalized
+emails are not matched through a compatibility fallback or rewritten automatically. Review any
+such records privately before upgrading and handle legacy cleanup separately if needed.
 
 If multiple Users share a normalized email, sign-in selects a record only when exactly one has
 the same Google subject ID as the authenticated identity. Otherwise sign-in fails. Roster edits
