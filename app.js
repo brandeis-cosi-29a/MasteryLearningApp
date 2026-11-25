@@ -1505,7 +1505,7 @@ app.get("/showSkill/:courseId/:skillId", authorize, hasCourseAccess,
   });
   </script>
   <script type="text/javascript"
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
   </script>`;
       markdownText = mathjaxScript + markdownText;
     res.locals.markdownText = markdownText;
@@ -3088,7 +3088,7 @@ app.get("/showProblem/:courseId/:psetId/:probId",
   });
 </script>
 <script type="text/javascript"
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
 </script>
 
 `;
@@ -4907,7 +4907,7 @@ MathJax.Hub.Config({
 });
 </script>
 <script type="text/javascript"
-src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS-MML_HTMLorMML,Safe">
 </script>`;
     markdownText = mathjaxScript + markdownText;
 

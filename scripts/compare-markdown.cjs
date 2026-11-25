@@ -35,20 +35,37 @@ function canonicalHtml(html) {
   return JSON.stringify(canonical(parseDocument(html)));
 }
 
+function nodeText(node) {
+  return node.type === 'text' ? node.data : (node.children || []).map(nodeText).join('');
+}
+
 function visibleText(html) {
-  const walk = node => node.type === 'text' ? node.data : (node.children || []).map(walk).join('');
-  return walk(parseDocument(html)).replace(/[ \t\r\n]+/g, ' ').replace(/^ +| +$/g, '');
+  return nodeText(parseDocument(html)).replace(/[ \t\r\n]+/g, ' ').replace(/^ +| +$/g, '');
+}
+
+function bareWwwLinks(html) {
+  const links = new Map();
+  const walk = node => {
+    if (node.name === 'a' && node.attribs.href) {
+      const label = nodeText(node).trim();
+      if (/^www\./i.test(label)) links.set(label, (links.get(label) || 0) + 1);
+    }
+    for (const child of node.children || []) walk(child);
+  };
+  walk(parseDocument(html));
+  return links;
 }
 
 function compareCorpus(corpus, legacy) {
   if (!Array.isArray(corpus.problems) || !Array.isArray(corpus.skills)) throw Error('Expected problems and skills arrays.');
   const counts = {problems: corpus.problems.length, skills: corpus.skills.length,
-    rendered: 0, passthrough: 0, identical: 0, formatting: 0, layout: 0, text: 0, sanitizerChanges: 0};
+    rendered: 0, passthrough: 0, identical: 0, formatting: 0, layout: 0, text: 0, sanitizerChanges: 0,
+    bareWwwNoLongerLinked: {problems: 0, skills: 0, occurrences: 0}};
   const records = [], differences = [];
   for (const kind of ['problems', 'skills']) for (const row of corpus[kind]) {
     const source = (kind === 'problems' ? row.problemText : row.description) ?? '';
     if (typeof source !== 'string') throw Error('Content must be a string or null.');
-    const record = {kind, id: String(row._id), mimeType: row.mimeType,
+    const record = {kind, id: row._id?.$oid ?? String(row._id), mimeType: row.mimeType,
       sourceSha256: createHash('sha256').update(source).digest('hex')};
     if (kind === 'problems' && row.mimeType !== 'markdown') {
       counts.passthrough++; record.status = 'passthrough'; records.push(record); continue;
@@ -56,6 +73,12 @@ function compareCorpus(corpus, legacy) {
     counts.rendered++;
     const before = legacy.makeHtml(source) || '';
     const after = renderMarkdown(source);
+    const oldWww = bareWwwLinks(before), newWww = bareWwwLinks(after);
+    const lostWww = [...oldWww].reduce((sum, [label, count]) => sum + Math.max(0, count - (newWww.get(label) || 0)), 0);
+    if (lostWww) {
+      counts.bareWwwNoLongerLinked[kind]++;
+      counts.bareWwwNoLongerLinked.occurrences += lostWww;
+    }
     const sanitizedBefore = sanitizeRenderedHtml(before);
     const beforeCanonical = canonicalHtml(before);
     record.sanitizerChanged = beforeCanonical !== canonicalHtml(sanitizedBefore);
