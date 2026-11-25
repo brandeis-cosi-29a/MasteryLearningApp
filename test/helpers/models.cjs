@@ -6,6 +6,7 @@ function matches(row, filter) {
     if (key === '$or') return value.some(q => matches(row, q));
     if (key === '$and') return value.every(q => matches(row, q));
     const actual = row[key];
+    if (Object.prototype.toString.call(value) === '[object RegExp]') return typeof actual === 'string' && value.test(actual);
     if (value && typeof value === 'object' && !value._bsontype && !value._id) {
       return Object.entries(value).every(([op, target]) => {
         const values = Array.isArray(actual) ? actual : [actual];
@@ -50,6 +51,7 @@ function models() {
       populate(field) {this.populations.push(field); return this;}
       sort() {return this;}
       collation() {return this;}
+      limit(count) {this.maxResults = count; return this;}
       lean() {return this;}
       async distinct(field) {return [...new Set((await this).flatMap(row => row[field] || []))];}
       async count() {return rows.filter(row => matches(row, this.filter)).length;}
@@ -57,6 +59,7 @@ function models() {
       then(resolve, reject) {
         try {
           let found = rows.filter(row => matches(row, this.filter)).map(row => new Document({...row}));
+          if (this.maxResults !== undefined) found = found.slice(0, this.maxResults);
           for (const field of this.populations) {
             const model = ({studentId: 'User', reviewerId: 'User', skillId: 'Skill', skills: 'Skill', courseId: 'Course', psetId: 'ProblemSet', examId: 'ProblemSet'})[field];
             if (!model) throw Error(`Unsupported population ${field}`);
