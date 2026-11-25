@@ -18,7 +18,9 @@ CLIENT_ID=GOOGLE_CLIENT_ID_GOES_HERE
 CLIENT_SECRET=GOOGLE_SECRET_GOES_HERE
 CALLBACK_URL=http://127.0.0.1:5500/login/authorized
 MONGODB_URL=mongodb://localhost:27017/PICK_A_DATABASE_NAME
-UPLOAD_TO = "LOCAL" # "LOCAL" or "AWS"
+UPLOAD_TO=LOCAL
+NODE_ENV=development
+ALLOW_LOCAL_ANSWER_STORAGE=true
 ```
 the administrator has special privileges, including being able to add or remove instructors and to see all courses on the app.
 
@@ -36,6 +38,18 @@ A value that is not a positive number is ignored — the app logs a warning and 
 rather than letting a typo become the limit. A file over the cap is rejected with an HTTP 413 and
 an error page naming the limit; nothing is written to the database or to S3, so a rejected
 re-upload leaves a student's existing answer image untouched.
+
+### Optional: peer-review time limit
+
+| variable | default | applies to |
+|---|---|---|
+| `PEER_REVIEW_TIMEOUT_MINUTES` | 10 | how long a peer-review assignment stays reserved for its reviewer |
+
+When the time limit runs out, the assignment is released the next time any student asks for a
+review of that problem. After that, the original reviewer can no longer open the answer or submit
+a review of it, and anything they were still typing is lost. Set it longer than a review actually
+takes. Like the upload caps, a value that is not a positive number logs a warning and falls back
+to the default. Tell instructors before shortening it during a term.
 
 The 25MB default was chosen against real data: the largest student answer photo on the Brandeis
 deployment was 19.6MB and 99% were under 4MB.
@@ -112,6 +126,14 @@ than the app name unless you have completed Google's brand verification (which r
 ownership of the domain in Google Search Console).
 
 ## Deploying to the cloud
+
+Deployed instances require `UPLOAD_TO=AWS`. Before upgrading an existing
+instance, follow the [private-image cutover and authorization checks](authorization-fix.md#deployment-required-storage-cutover).
+The server verifies all four bucket-level S3 Block Public Access settings before
+listening, and its IAM principal needs `s3:GetBucketPublicAccessBlock` in addition
+to object access. Local image storage is supported only as an explicitly enabled,
+loopback-only testbed; it is not a deployment option.
+
 We currently use render.com to deploy our app from the github repository.
 We use MONGODB Atlas for database access
 and we use AWS S3 for storing images. You can specify an AWS S3 bucket by

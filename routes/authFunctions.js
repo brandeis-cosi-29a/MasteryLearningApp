@@ -13,6 +13,9 @@ the user must be logged in to access any of route except "/login"
 const Course = require("../models/Course");
 const CourseMember = require("../models/CourseMember");
 const Instructor = require("../models/Instructor");
+const createError = require('http-errors');
+const {validId, sameId} = require('./materialAccess');
+const {validateParams, validateBody} = require('./courseScope');
 const adminEmail = process.env.ADMIN_EMAIL; // "tjhickey@brandeis.edu"; // the admin email
 
 
@@ -51,75 +54,28 @@ const isLoggedIn = async (req, res, next) => {
 
   const authorize = async (req, res, next) => {
     try {
-      // only logged in users on routes with courseId can be authorized
-      if (!req.isAuthenticated() || !req.params.courseId) {
-        res.redirect("/login");
-      } else {
-        const id = req.params.courseId;
-        const course = await Course.findOne({_id: id});
-
-        res.locals.courseInfo = course; 
-        
-        res.locals.course = course;
-
-        res.locals.isAdmin = req.user.googleemail == adminEmail;
-
-        const member = 
-          await CourseMember.findOne(
-              {studentId: req.user._id, 
-                courseId: res.locals.courseInfo._id});
-         
-        const instructor 
-                = await Instructor.findOne({userId: req.user._id, status: "active"});
-             
-
-        if (!member){
-            // these should all be false for new courses
-            res.locals.isOwner = false;
-            res.locals.isEnrolled = false;
-            res.locals.isTA = false;
-            if (res.locals.courseInfo.ownerId == req.user._id+"" ){
-              // this shouldn't happen unless the owner is accidentally
-              // removed from the course, if so then we add them back in!
-                res.locals.isOwner = true;
-                let registration = {
-                  studentId: req.user._id,
-                  courseId: course._id,
-                  role: "owner",
-                  createdAt: new Date(),
-                };
-                let cm = new CourseMember(registration);
-                await cm.save();
-            }
-        } else {
-            res.locals.isOwner 
-              = member.role=='owner';
-            res.locals.isEnrolled = member.role=='student';         
-            res.locals.isTA = member.role=='ta';
-        }
-
-        res.locals.isOwner 
-                 = res.locals.isOwner
-                || res.locals.isAdmin 
-                || res.locals.courseInfo.ownerId == req.user._id+""
-                || (instructor && res.locals.isTA)
-                ;
-
-        res.locals.hasCourseAccess 
-            = res.locals.isEnrolled 
-              || res.locals.isTA 
-              || res.locals.isOwner
-              || res.locals.isAdmin;
-              
-        res.locals.isStaff 
-            = res.locals.isTA 
-              || res.locals.isOwner
-              || res.locals.isAdmin;
-
-        // give Admin access to all courses ...
-        //res.locals.isOwner ||= res.locals.isAdmin;
-        next()
-      }
+      if (!req.isAuthenticated()) return res.redirect('/login');
+      if (!validId(req.params.courseId)) throw createError(404);
+      const course = await Course.findOne({_id: req.params.courseId});
+      if (!course) throw createError(404);
+      const member = await CourseMember.findOne({studentId: req.user._id, courseId: course._id});
+      const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
+      res.locals.courseInfo = res.locals.course = course;
+      res.locals.isInstructor = !!instructor;
+      res.locals.isAdmin = !!adminEmail && req.user.googleemail === adminEmail;
+      res.locals.isTA = member?.role === 'ta';
+      res.locals.isEnrolled = member?.role === 'student';
+      // Preserve existing owner/admin and approved-instructor-as-TA permissions,
+      // without creating memberships as a side effect of a read request.
+      res.locals.isOwner = member?.role === 'owner' || res.locals.isAdmin ||
+        sameId(course.ownerId, req.user._id) || (!!instructor && res.locals.isTA);
+      res.locals.isStaff = res.locals.isTA || res.locals.isOwner;
+      res.locals.hasCourseAccess = res.locals.isEnrolled || res.locals.isStaff;
+      if (!res.locals.hasCourseAccess) throw createError(403);
+      res.set('Cache-Control', 'private, no-store');
+      await validateParams(req, res);
+      await validateBody(req);
+      next();
     } catch (e) {
       next(e);
     }
@@ -133,7 +89,7 @@ const isLoggedIn = async (req, res, next) => {
       if (res.locals.isEnrolled || res.locals.isTA || res.locals.isOwner) {
         next();
       } else {
-        res.send("You do not have access to this course.");
+        res.status(403).send("You do not have access to this course.");
       }
     } catch (e) {
       next(e);
@@ -146,7 +102,7 @@ const isLoggedIn = async (req, res, next) => {
       if (res.locals.isOwner || res.locals.isTA) {
         next();
       } else {
-        res.send("Only TAs and the owner have access to this page.");
+        res.status(403).send("Only TAs and the owner have access to this page.");
       }
     } catch (e) {
       next(e);
@@ -167,7 +123,7 @@ const isLoggedIn = async (req, res, next) => {
         if (instructor) {
           next();
         } else {
-          res.send("Only the instructors have access to this page.");
+          res.status(403).send("Only approved instructors have access to this page.");
         }
       }
     } catch (e) {
@@ -180,7 +136,7 @@ const isLoggedIn = async (req, res, next) => {
       if (res.locals.isOwner) {
         next();
       } else {
-        res.send("Only the owner has access to this page.");
+        res.status(403).send("Only the owner has access to this page.");
       }
     } catch (e) {
       next(e);
@@ -190,11 +146,12 @@ const isLoggedIn = async (req, res, next) => {
   
   const isAdmin = async (req, res, next) => {
     try {
-      if (req.user.googleemail == adminEmail){
+      if (!req.user) return res.redirect("/login");
+      if (adminEmail && req.user.googleemail === adminEmail){
         res.locals.isAdmin = true;
         next()
       } else {
-        res.send("Only the admin has access to this page.");
+        res.status(403).send("Only the admin has access to this page.");
       }      
     } catch (e) {
       next(e);

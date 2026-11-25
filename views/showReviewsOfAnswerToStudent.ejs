@@ -22,8 +22,8 @@
          style="border:thin solid black; white-space: pre-wrap; font-family:monospace; padding:10px"
          ><%= answer.answer %></pre>
     <% } else { %>
-        <a href="<%= answer.imageFilePath %>">
-             <img src="<%= answer.imageFilePath %>" width="50%">
+        <a href="<%= answerImageUrl(answer) %>">
+             <img src="<%= answerImageUrl(answer) %>" width="50%">
         </a>
         <% } %>
 

@@ -25,7 +25,7 @@ app.get("/downloadAnswers/:courseId/:probId", authorize, hasStaffAccess,
     try {
       const probId = req.params.probId;
       res.locals.probId = probId;
-      const answers = await Answer.find({problemId: probId}).populate('studentId');
+      const answers = await Answer.find({courseId: req.params.courseId, problemId: probId}).populate('studentId');
       const csvStream = fs.createWriteStream("private/"+probId+".csv")
       csvStream.write("filename,created_at,full_name\n")
         for(let x of answers) {

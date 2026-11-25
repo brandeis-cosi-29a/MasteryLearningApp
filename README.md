@@ -3,6 +3,8 @@ This is a highly opinionated version of the older SpecsGradingApp
 
 See the [documentation](./doc/README.md) or look into the [developer's notes](./doc/developers)
 
+Before deploying authorization changes, follow the [course-access rules and private-image cutover](./doc/authorization-fix.md).
+
 The key idea is that the MasteryLearningApp makes it relatively easy for faculty to teach using the Mastery Assessment Pedagogy which consists of the following four practices:
 
 1. Building a list of measureable skills and a library of challenging problems for that skill. The Mastery Learning App make it easy to share skill lists and skill-based problem libraries between courses and instructors.
