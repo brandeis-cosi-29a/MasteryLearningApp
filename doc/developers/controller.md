@@ -11,15 +11,7 @@ const express = require("express");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan"); // to log requests to the console
-const showdown  = require('showdown'); // to convert markdown to HTML
-const converter = new showdown.Converter({
-  literalMidWordUnderscores: true,  // Prevents underscores in the middle of words from being parsed as emphasis
-  literalMidWordAsterisks: true,    // Same for asterisks (optional)
-  simplifiedAutoLink: true,         // Optional, but useful for other formatting
-  strikethrough: true,              // Optional
-  tables: true,                     // Optional
-  ghCodeBlocks: true                // Optional
-});
+const {renderMarkdown} = require('./config/markdown'); // Markdown parsing and HTML sanitization
 
 const multer = require("multer"); // to handle file uploads
 const csv = require('csv-parser')

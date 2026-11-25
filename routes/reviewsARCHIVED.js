@@ -61,8 +61,7 @@ object to store the pendingReviews and not the problem object.
 
 const express = require("express");
 const app = express.Router();
-const showdown  = require('showdown');
-const converter = new showdown.Converter();
+const {renderMarkdown} = require('../config/markdown');
 
 // Models!
 
@@ -523,7 +522,7 @@ app.get("/gradeProblemWithoutAnswer/:courseId/:psetId/:probId/:studentId", autho
           
     let markdownText = problem.problemText;
     if (problem.mimeType == 'markdown') {
-      markdownText = converter.makeHtml(markdownText);
+      markdownText = renderMarkdown(markdownText);
       const mathjaxScript = 
       `<script type="text/x-mathjax-config">
   MathJax.Hub.Config({
