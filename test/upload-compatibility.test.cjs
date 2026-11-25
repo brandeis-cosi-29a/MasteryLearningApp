@@ -119,6 +119,32 @@ test('administrative student-data deletion still removes the actual image keys',
   });
 });
 
+test('administrative deletion logs a failed S3 key and continues to later answers', async () => {
+  let attempted = 0;
+  const {app, db, ids, imageObjects, s3, errors} = fixture({s3Response: request => {
+    if (request.method === 'DELETE' && ++attempted === 1) throw Error('Synthetic delete failure');
+  }});
+  db.User.rows[0].googleemail = 'admin@example.test';
+  const firstKey = new URL(db.Answer.rows[0].imageFilePath).pathname.slice(1);
+  const secondKey = 'studentImages/next.png';
+  db.Answer.rows.push({...db.Answer.rows[0], _id: ids.request,
+    imageFilePath: `https://test-bucket.s3.us-east-1.amazonaws.com/${secondKey}`});
+  imageObjects.set(firstKey, PNG);
+  imageObjects.set(secondKey, PNG);
+  await serve(app, async request => {
+    const response = await request(`/deleteStudentData/${ids.course}`, {user: ids.owner});
+    assert.equal(response.status, 302);
+    assert.equal(attempted, 2, 'later objects are attempted after a rejection');
+    assert.deepEqual(s3.deletes, [secondKey]);
+    assert(imageObjects.has(firstKey));
+    assert(!imageObjects.has(secondKey));
+    assert(errors.includes(`with key ${firstKey}`));
+    assert(errors.some(message => message.includes('Synthetic delete failure')));
+    assert(!errors.some(message => message.includes('ReferenceError')));
+    assert(!db.Answer.rows.some(row => String(row.courseId) === String(ids.course)));
+  });
+});
+
 test('oversized photos retain existing answers and return 413', async () => {
   const {app, db, ids, writes} = fixture({env: {MAX_UPLOAD_MB: '0.001'}});
   const before = JSON.stringify(db.Answer.rows);

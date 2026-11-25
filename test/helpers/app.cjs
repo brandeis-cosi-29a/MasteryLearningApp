@@ -41,6 +41,7 @@ function fixture(options = {}) {
   const similarity = load('routes/similarity.js', {...modelSubstitutes, './authFunctions.js': auth});
   const s3 = storage(options);
   const {uploads, imageReads, imageObjects} = s3;
+  const errors = [];
   const imageRouter = load('routes/answerImages.js', {
     './authFunctions': auth, './recordAccess': records,
   });
@@ -55,9 +56,9 @@ function fixture(options = {}) {
     './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records, './routes/answerImages': imageRouter,
     ...options.substitutes,
   }, {process: {env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test', ...options.env}},
-    console: {log() {}, error() {}, dir() {}, warn() {}}});
+    console: {log() {}, error(...args) {errors.push(args.join(' '));}, dir() {}, warn() {}}});
   if (!options.realViews) app.response.render = function(view, locals) {this.json({view, ...this.locals, ...locals});};
-  return {app, db, ids, writes, uploads, imageReads, imageObjects, auth, scope, s3};
+  return {app, db, ids, writes, uploads, imageReads, imageObjects, auth, scope, s3, errors};
 }
 
 async function serve(app, run) {

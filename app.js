@@ -468,9 +468,9 @@ const deleteStudentData = async (courseId) => {
       for (let answer of answers) {
         if (answer.imageFilePath) {
           if (answer.imageFilePath.startsWith("https://")) {
+            // remove the https://domain_name/ from the imageFilePath to get the key
+            const imageKey = answer.imageFilePath.split("/").slice(3).join("/");
             try {
-                // remove the https://domain_name/ from the imageFilePath to get the key
-                const imageKey = answer.imageFilePath.split("/").slice(3).join("/");
                 await s3.send(new DeleteObjectCommand({
                   Bucket: process.env.AWS_BUCKET_NAME,
                   Key: imageKey
