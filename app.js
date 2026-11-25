@@ -27,7 +27,7 @@ const streamifier = require("streamifier"); // to convert a buffer to a stream f
 
 const fsPromises = require('fs').promises; // to read files asynchronously
 
-const archiver = require('archiver'); // to create zip files of personalized exams
+const {ZipArchive} = require('archiver'); // to create zip files of personalized exams
 
 const aws = require('aws-sdk'); //"^2.2.41" to interact with AWS S3 for file uploads
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
@@ -235,7 +235,6 @@ const SupportFile = require("./models/SupportFile.js");
 const RegradeRequest = require("./models/RegradeRequest");
 const PostedGrades = require("./models/PostedGrades.js");
 const Instructor = require("./models/Instructor");
-//const ejsLint = require("ejs-lint");
 
 
 
@@ -942,7 +941,7 @@ app.post("/uploadRoster/:courseId",
 
   streamifier
     .createReadStream(buffer)
-    .pipe(csv()) //.parse({ headers: true, ignoreEmpty: true })) // <== this is @fast-csv/parse!!
+    .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
     })
@@ -2197,7 +2196,7 @@ app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
 
   streamifier
     .createReadStream(buffer)
-    .pipe(csv()) //.parse({ headers: true, ignoreEmpty: true })) // <== this is @fast-csv/parse!!
+    .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
     })
@@ -2696,7 +2695,7 @@ const generateTex = (problems) => {
     
 
         // Create zip archive
-        const archive = archiver('zip', {
+        const archive = new ZipArchive({
             zlib: { level: 9 } // Maximum compression
         });
     
@@ -2812,7 +2811,7 @@ const generateTex = (problems) => {
       
   
           // Create zip archive
-          const archive = archiver('zip', {
+          const archive = new ZipArchive({
               zlib: { level: 9 } // Maximum compression
           });
       
