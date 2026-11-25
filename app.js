@@ -243,7 +243,7 @@ Setting up the MongoDB database connection
 (flash = require("connect-flash"));
 // This allows the session variables to be stored in the database
 // so we can use multiple servers with the same session data
-const MongoStore = require("connect-mongo")(session);
+const MongoStore = require("connect-mongo");
 // END OF AUTHENTICATION MODULES
 
 // INITIALIZING THE MONGOOSE DATABASE CONNECTION
@@ -256,7 +256,10 @@ const mongoose = require("mongoose");
 // treated as fatal since v15 -- the process dies on a stack trace instead of
 // saying what went wrong.  Report the reason and exit cleanly; never print the
 // URL itself, because the Atlas SRV string embeds the password.
-mongoose.connect(process.env.MONGODB_URL, {useNewUrlParser: true, useUnifiedTopology: true, family: 4})
+// Share the connected driver client with the session store; do not open a second pool.
+const mongoClientPromise = mongoose.connect(process.env.MONGODB_URL, {family: 4})
+  .then(() => mongoose.connection.getClient());
+mongoClientPromise
   .catch((e) => {
     console.error(`FATAL: could not connect to MongoDB: ${e.message}`);
     process.exit(1);
@@ -341,7 +344,7 @@ app.use(session(
     resave: false,
     saveUninitialized: false,
     cookie: {maxAge: 24 * 60 * 60 * 1000}, // allow login for one day...
-    store: new MongoStore({mongooseConnection: mongoose.connection}),
+    store: MongoStore.create({clientPromise: mongoClientPromise}),
   })
 );
 
@@ -610,11 +613,11 @@ app.post("/profile", isLoggedIn,
 
 app.get("/stats", isLoggedIn,
   async (req, res, next) => {
-  let courseCount = await Course.find().count();
-  let userCount = await User.find().count();
-  let problemCount = await Problem.find().count();
-  let answerCount = await Answer.find().count();
-  let reviewCount = await Review.find().count();
+  let courseCount = await Course.countDocuments();
+  let userCount = await User.countDocuments();
+  let problemCount = await Problem.countDocuments();
+  let answerCount = await Answer.countDocuments();
+  let reviewCount = await Review.countDocuments();
   let courses = await Course.find({}, {name: 1});
   let googleemail;
   if (typeof req.user !== "undefined") {
@@ -1330,7 +1333,7 @@ app.get("/showCourseToStudent/:courseId",
 
     }
     res.locals.theUser = theUser;
-    res.locals.AllAnswers = await Answer.find({courseId}).count();
+    res.locals.AllAnswers = await Answer.countDocuments({courseId});
     res.locals.OneAnswer = await Answer.findOne({courseId});
     res.locals.answers = await Answer.find({courseId,studentId:theUser._id});
     res.locals.questions = await Problem.find({courseId});
@@ -3939,7 +3942,7 @@ app.post("/addTA/:courseId", authorize, isOwner,
       // a user can have at most one role in a course....
       // but we can't remove the owner!
       
-      await CourseMember.remove({courseId: req.params.courseId, studentId: ta._id});
+      await CourseMember.deleteMany({courseId: req.params.courseId, studentId: ta._id});
       await courseMember.save();
 
       res.redirect("/showTAs/" + req.params.courseId);
@@ -4220,7 +4223,7 @@ app.get("/showMastery_PRA/:courseId",
   const course = await Course.findOne({_id:courseId});
   const exams = await ProblemSet.find({courseId});
  
-  res.locals.questions = await Problem.find({courseId}).count();
+  res.locals.questions = await Problem.countDocuments({courseId});
   const csv = req.query.csv;
   res.locals.course = course;
   const grades = await PostedGrades.find({courseId}).sort({email:1});

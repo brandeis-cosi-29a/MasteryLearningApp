@@ -142,6 +142,38 @@ ownership of the domain in Google Search Console).
 
 ## Deploying to the cloud
 
+### MongoDB and sessions
+
+MLA uses Mongoose 8 and connect-mongo 5 with the MongoDB 6 driver. The session
+store waits for Mongoose to connect, then shares that driver's client and database.
+Keep the database name in `MONGODB_URL`; there is no separate session-store URL.
+Sessions still use the `sessions` collection, JSON serialization, its native
+`expires` TTL index, and a one-day cookie. Keep `SESSION_SECRET` unchanged during
+this upgrade so existing signed cookies remain usable. No session purge or data
+migration is required for the app's existing unencrypted session format.
+
+The upgrade replaces removed count/deletion APIs and removes obsolete connection
+options. Mongoose 8 keeps unknown query fields rather than stripping them, and
+ObjectId strings must be 24 hexadecimal characters. MLA's URL-ID checks already
+require that format. OAuth already uses promise-based model calls. Instructor
+content and course roles require no edits for this upgrade.
+
+After deployment, check the database host/name startup messages and the absence
+of connection or session-index errors. In a test course, verify an existing
+signed-in browser session, a fresh Google login, and logout; after restarting the
+app, the signed-in session should still work. Also open statistics, the student
+course page and PRA mastery totals, then promote a rostered test student to TA
+and confirm their membership in a second test course is unchanged. Automated
+tests use real Mongoose models, Passport and connect-mongo with synthetic
+collection I/O; a deployed smoke test is still needed for Atlas connectivity,
+index permissions and persistence.
+
+See the upstream [Mongoose 7 migration guide](https://mongoosejs.com/docs/migrating_to_7.html),
+[Mongoose 8 migration guide](https://mongoosejs.com/docs/migrating_to_8.html), and
+[connect-mongo migration guide](https://github.com/jdesboeufs/connect-mongo/blob/v5.1.0/MIGRATION_V4.md).
+
+### Answer image storage
+
 Deployed instances require `UPLOAD_TO=AWS`. Before upgrading an existing
 instance, follow the [private-image cutover and authorization checks](authorization-fix.md#deployment-required-storage-cutover).
 The server verifies all four bucket-level S3 Block Public Access settings before

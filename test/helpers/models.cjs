@@ -54,7 +54,6 @@ function models() {
       limit(count) {this.maxResults = count; return this;}
       lean() {return this;}
       async distinct(field) {return [...new Set((await this).flatMap(row => row[field] || []))];}
-      async count() {return rows.filter(row => matches(row, this.filter)).length;}
       async exec() {return this;}
       then(resolve, reject) {
         try {
@@ -78,12 +77,13 @@ function models() {
     Document.find = (q = {}, projection) => {const query = new Query(q); return projection ? query.select(projection) : query;};
     Document.findOne = (q = {}, projection) => {const query = new Query(q, true); return projection ? query.select(projection) : query;};
     Document.findById = value => Document.findOne({_id: value});
+    Document.countDocuments = async (q = {}) => rows.filter(row => matches(row, q)).length;
     Document.insertMany = async docs => Promise.all(docs.map(doc => new Document(doc).save()));
     Document.deleteMany = async q => {
       writes.push([name, 'deleteMany']);
       for (let i = rows.length - 1; i >= 0; i--) if (matches(rows[i], q)) rows.splice(i, 1);
     };
-    Document.deleteOne = Document.remove = Document.deleteMany;
+    Document.deleteOne = Document.deleteMany;
     Document.findOneAndDelete = Document.deleteMany;
     Document.findOneAndUpdate = async (q, update, options = {}) => {
       let doc = await Document.findOne(q);
