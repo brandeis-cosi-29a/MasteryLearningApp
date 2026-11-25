@@ -48,14 +48,14 @@ function fixture(options = {}) {
   const app = load('app.js', {
     ...modelSubstitutes,
     dotenv: {config() {}}, morgan: () => (req, res, next) => next(),
-    mongoose: {Types, connect: () => Promise.resolve(), connection: new EventEmitter()},
+    mongoose: {Types, connect: () => Promise.resolve(), connection: Object.assign(new EventEmitter(), {getClient: () => ({})})},
     '@aws-sdk/client-s3': {...s3Sdk, S3Client: s3.S3Client},
-    'connect-mongo': () => session.MemoryStore,
+    'connect-mongo': {create: () => new session.MemoryStore()},
     './routes/authRouter': authRouter, './routes/similarity': similarity,
     './routes/updatesARCHIVED.js': {}, './routes/authFunctions.js': auth,
     './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records, './routes/answerImages': imageRouter,
     ...options.substitutes,
-  }, {process: {env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test', ...options.env}},
+  }, {process: {exit: options.exit, env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test', ...options.env}},
     console: {log() {}, error(...args) {errors.push(args.join(' '));}, dir() {}, warn() {}}});
   if (!options.realViews) app.response.render = function(view, locals) {this.json({view, ...this.locals, ...locals});};
   return {app, db, ids, writes, uploads, imageReads, imageObjects, auth, scope, s3, errors};
