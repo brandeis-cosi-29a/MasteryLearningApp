@@ -39,6 +39,18 @@ rather than letting a typo become the limit. A file over the cap is rejected wit
 an error page naming the limit; nothing is written to the database or to S3, so a rejected
 re-upload leaves a student's existing answer image untouched.
 
+### Optional: peer-review time limit
+
+| variable | default | applies to |
+|---|---|---|
+| `PEER_REVIEW_TIMEOUT_MINUTES` | 10 | how long a peer-review assignment stays reserved for its reviewer |
+
+When the time limit runs out, the assignment is released the next time any student asks for a
+review of that problem. After that, the original reviewer can no longer open the answer or submit
+a review of it, and anything they were still typing is lost. Set it longer than a review actually
+takes. Like the upload caps, a value that is not a positive number logs a warning and falls back
+to the default. Tell instructors before shortening it during a term.
+
 The 25MB default was chosen against real data: the largest student answer photo on the Brandeis
 deployment was 19.6MB and 99% were under 4MB.
 

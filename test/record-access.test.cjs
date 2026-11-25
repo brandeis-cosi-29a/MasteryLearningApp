@@ -3,6 +3,34 @@ const assert = require('node:assert/strict');
 const {fixture, serve} = require('./helpers/app.cjs');
 const {id} = require('./helpers/models.cjs');
 
+// A 30-minute-old assignment, released (or not) when a classmate's /reviewAnswers
+// runs the expiry sweep, then submitted by the original reviewer.
+async function submitAfterThirtyMinutes(env) {
+  const {app, db, ids} = fixture({env});
+  db.Course.rows[0].courseType = 'pra';
+  db.Answer.rows.push({_id: id(501), courseId: ids.course, psetId: ids.pset,
+    problemId: ids.problem, studentId: ids.student, answer: 'own submission',
+    reviewers: [], pendingReviewers: [], numReviews: 0});
+  let status;
+  await serve(app, async request => {
+    const assignment = await request(`/reviewAnswers/${ids.course}/${ids.pset}/${ids.problem}`, {user: ids.student});
+    assert.equal(assignment.headers.get('location'), `/showReviewsOfAnswer/${ids.course}/${ids.pset}/${ids.answer}`);
+    for (const pending of db.Problem.rows[0].pendingReviews) pending.timeSent = new Date().getTime() - 30 * 60 * 1000;
+    await request(`/reviewAnswers/${ids.course}/${ids.pset}/${ids.problem}`, {user: ids.classmate});
+    status = (await request(`/saveReview2/${ids.course}/${ids.pset}/${ids.problem}/${ids.answer}`, {
+      user: ids.student, method: 'POST', headers: {'content-type': 'application/x-www-form-urlencoded'},
+      body: 'review=Slow+but+careful&goodFaithEffort=yes',
+    })).status;
+  });
+  return status;
+}
+
+test('PEER_REVIEW_TIMEOUT_MINUTES sets how long a peer-review assignment survives', async () => {
+  assert.equal(await submitAfterThirtyMinutes({PEER_REVIEW_TIMEOUT_MINUTES: '60'}), 302, '60-minute window keeps the assignment');
+  assert.equal(await submitAfterThirtyMinutes({}), 403, 'default 10-minute window releases it');
+  assert.equal(await submitAfterThirtyMinutes({PEER_REVIEW_TIMEOUT_MINUTES: 'an hour'}), 403, 'invalid value falls back to 10 minutes');
+});
+
 function ownSubmission(db, ids) {
   db.Answer.rows.push({_id: id(501), courseId: ids.course, psetId: ids.pset,
     problemId: ids.problem, studentId: ids.student, answer: 'own submission',

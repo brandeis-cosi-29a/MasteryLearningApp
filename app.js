@@ -151,6 +151,30 @@ const megabyteEnv = (name, defaultMB) => {
 const ANSWER_PHOTO_SIZE_LIMIT = megabyteEnv("MAX_UPLOAD_MB", 25);
 const STAFF_FILE_SIZE_LIMIT = megabyteEnv("MAX_STAFF_UPLOAD_MB", 1);
 
+/*
+PEER_REVIEW_TIMEOUT_MINUTES (default 10) is how long a peer-review assignment
+stays reserved for the student it was given to. When it expires, the next
+/reviewAnswers request for that problem releases it, and from then on the
+student can no longer open the answer or submit a review of it. A student
+still writing when the window closes loses the review, so the window should
+comfortably exceed the time a review actually takes.
+*/
+const PEER_REVIEW_TIMEOUT_MS = (() => {
+  const name = "PEER_REVIEW_TIMEOUT_MINUTES";
+  const defaultMinutes = 10;
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") {
+    return defaultMinutes * 60 * 1000;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(
+      `${name}="${raw}" is not a positive number, using ${defaultMinutes} minutes instead`);
+    return defaultMinutes * 60 * 1000;
+  }
+  return Math.round(parsed * 60 * 1000);
+})();
+
 const upload =
   (process.env.UPLOAD_TO=='AWS')?
     multer({ storage: storageAWS, limits: {fileSize: ANSWER_PHOTO_SIZE_LIMIT} })
@@ -4471,12 +4495,12 @@ app.get("/reviewAnswers/:courseId/:psetId/:probId", authorize, hasCourseAccess, 
     let problem = await Problem.findOne({_id: probId});
 
     //first we remove all pendingReviews that have exceeded
-    // the time limit is currently 10 minutes, but could be adjusted
+    // the time limit, PEER_REVIEW_TIMEOUT_MINUTES (default 10)
     // e.g. we could be ambitious and keep track of the average
     // time to review the problem and use an adaptive timeout,
     // but let's do that later!
 
-    const tooOld = new Date().getTime() - 1 *1000*60*10; // 10 minutes
+    const tooOld = new Date().getTime() - PEER_REVIEW_TIMEOUT_MS;
     let expiredReviews = [];
     problem.pendingReviews ||= [];
     let pendingReviews = problem.pendingReviews.filter((x) => {
