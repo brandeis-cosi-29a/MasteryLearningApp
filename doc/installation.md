@@ -166,4 +166,20 @@ AWS_ACCESS_KEY_ID = 'YOUR KEY GOES HERE'
 AWS_REGION = 'YOUR REGION'
 AWS_BUCKET_NAME = 'YOUR BUCKET NAME'   
 ```
+
+S3 storage uses AWS SDK v3 (`@aws-sdk/client-s3`) and multer-s3 3. The app passes
+the access key, secret key, and region above to its S3 client. The SDK upgrade
+requires no environment-variable changes. Uploads retain private ACLs and the
+existing size limits; larger files use managed multipart uploads. Image reads
+stream the SDK response body through the authenticated image route.
+
+After deploying an SDK update, verify uploads in a test course using a rostered
+personal Google account: upload a small image, then an image larger than 5 MiB
+and below `MAX_UPLOAD_MB`. Confirm both display through the protected image
+route. Replace a reviewed answer's image as staff and confirm its answer ID and
+reviews survive. Also confirm an oversized upload reports 413 and retains the
+existing answer. Startup must still pass the bucket-privacy check. The automated
+suite exercises these paths with an in-memory S3 transport, but a deployed smoke
+test is needed to verify actual bucket permissions and connectivity.
+
 Contact the MLA team if you need some help deploying the app!
