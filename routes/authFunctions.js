@@ -16,7 +16,9 @@ const Instructor = require("../models/Instructor");
 const createError = require('http-errors');
 const {validId, sameId} = require('./materialAccess');
 const {validateParams, validateBody} = require('./courseScope');
-const adminEmail = process.env.ADMIN_EMAIL; // "tjhickey@brandeis.edu"; // the admin email
+const {normalizeEmail} = require('../config/emailIdentity');
+const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
+const isAdminEmail = email => !!adminEmail && normalizeEmail(email) === adminEmail;
 
 
 // route middleware to make sure a user is logged in
@@ -26,7 +28,7 @@ const isLoggedIn = async (req, res, next) => {
       res.locals.loggedIn = true;
       let instructor = await Instructor.findOne({userId: req.user._id});
       res.locals.isInstructor = (instructor && instructor.status == "active")
-      res.locals.isAdmin = req.user.googleemail == adminEmail;
+      res.locals.isAdmin = isAdminEmail(req.user.googleemail);
       res.locals.admin_email = adminEmail;
       let courseTaMember 
         = await CourseMember.findOne({studentId: req.user._id, role: "ta"});
@@ -62,7 +64,7 @@ const isLoggedIn = async (req, res, next) => {
       const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
       res.locals.courseInfo = res.locals.course = course;
       res.locals.isInstructor = !!instructor;
-      res.locals.isAdmin = !!adminEmail && req.user.googleemail === adminEmail;
+      res.locals.isAdmin = isAdminEmail(req.user.googleemail);
       res.locals.isTA = member?.role === 'ta';
       res.locals.isEnrolled = member?.role === 'student';
       // Preserve existing owner/admin and approved-instructor-as-TA permissions,
@@ -147,7 +149,7 @@ const isLoggedIn = async (req, res, next) => {
   const isAdmin = async (req, res, next) => {
     try {
       if (!req.user) return res.redirect("/login");
-      if (adminEmail && req.user.googleemail === adminEmail){
+      if (isAdminEmail(req.user.googleemail)){
         res.locals.isAdmin = true;
         next()
       } else {

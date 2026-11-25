@@ -1,90 +1,66 @@
-// config/passport.js
+'use strict';
 
-// load all the things we need
-//var FacebookStrategy = require('passport-facebook').Strategy;
-//var TwitterStrategy  = require('passport-twitter').Strategy;
-var GoogleStrategy = require("passport-google-oauth").OAuth2Strategy;
-
-// load up the user model
-var User = require("../models/User");
-
-// load the auth variables
-//var configAuth = require('./auth');
-require("dotenv").config(); //new
+const GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
+const User = require('../models/User');
+const CourseMember = require('../models/CourseMember');
+const Instructor = require('../models/Instructor');
+const {normalizeEmail, validEmail, findUserByEmail} = require('./emailIdentity');
+require('dotenv').config();
 
 module.exports = function (passport) {
-  // used to serialize the user for the session
-  passport.serializeUser(function (user, done) {
-    done(null, user.id);
+  const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
+  passport.serializeUser((user, done) => done(null, user.id));
+  passport.deserializeUser((id, done) => {
+    User.findById(id).then(user => done(null, user), done);
   });
 
-  // used to deserialize the user
-  passport.deserializeUser(function (id, done) {
-    User.findById(id, function (err, user) {
-      done(err, user);
-    });
-  });
+  async function authenticateGoogle(profile) {
+    // Passport fetches these claims server-to-server from Google's UserInfo
+    // endpoint using the code's access token. Do not trust request parameters,
+    // an email suffix, or an unverified decoded ID token for the domain gate.
+    const claims = profile?._json;
+    const email = normalizeEmail(claims?.email);
+    if (profile?.provider !== 'google' || typeof profile.id !== 'string' || !profile.id || claims?.sub !== profile.id ||
+        claims?.email_verified !== true || !validEmail(email)) return false;
 
-  // code for login (use('local-login', new LocalStategy))
-  // code for signup (use('local-signup', new LocalStategy))
-  // code for facebook (use('facebook', new FacebookStrategy))
-  // code for twitter (use('twitter', new TwitterStrategy))
+    let user;
+    try {
+      user = await findUserByEmail(User, email, profile.id);
+    } catch (error) {
+      if (error.status === 409) return false;
+      throw error;
+    }
+    let allowed = claims.hd === 'brandeis.edu' || (!!adminEmail && email === adminEmail);
+    if (!allowed && user) {
+      // This is a sign-in admission rule, not course authorization. Any existing
+      // membership/instructor record qualifies; course roles/status still apply
+      // in the route middleware, including dropped/inactive/denied records.
+      allowed = !!(await CourseMember.findOne({studentId: user._id})) ||
+        !!(await Instructor.findOne({userId: user._id}));
+    }
+    if (!allowed) return false; // No creation, linking, normalization, or token writes on denial.
 
-  // =========================================================================
-  // GOOGLE ==================================================================
-  // =========================================================================
-  passport.use(
-    new GoogleStrategy(
-      {
-        clientID: process.env.CLIENT_ID,
-        clientSecret: process.env.CLIENT_SECRET,
-        callbackURL: process.env.CALLBACK_URL,
-      },
-      function (token, refreshToken, profile, done) {
-        // make the code asynchronous
-        // User.findOne won't fire until we have all our data back from Google
-        process.nextTick(function () {
-          // try to find the user based on their google id
-          // User.findOne({ 'googleid' : profile.id }, function(err,
-          // CHANGED!  lookup via their email!
-          User.findOne({googleemail: profile.emails[0].value}, function (err, user) {
-            if (err) return done(err);
+    if (!user) {
+      return new User({googleid: profile.id, googleemail: email, googlename: profile.displayName}).save();
+    }
+    let changed = user.googleemail !== email;
+    user.googleemail = email;
+    if (!user.googleid) {
+      user.googleid = profile.id;
+      user.googlename = profile.displayName;
+      changed = true;
+    }
+    // Google access/refresh tokens are not used by MLA and must not be stored.
+    if (changed) await user.save();
+    return user;
+  }
 
-            if (user) {
-              // if a user is found, log them in
-              if (!user.googleid) {
-                user.googleid = profile.id;
-                user.googletoken = token;
-                user.googlename = profile.displayName;
-                user.save(function (err) {
-                  if (err) throw err;
-                  return done(null, user);
-                });
-              } else {
-                return done(null, user);
-              }
-            } else {
-
-              // if the user isnt in our database, create a new user
-              var newUser = new User({googleid: profile.id, googletoken: token, googlename: profile.displayName, googleemail: profile.emails[0].value});
-
-              // set all of the relevant information
-              /*
-                    newUser.google = {}
-                    newUser.google.id    = profile.id;
-                    newUser.google.token = token;
-                    newUser.google.name  = profile.displayName;
-                    newUser.google.email = profile.emails[0].value; // pull the first email
-                    */
-              // save the user
-              newUser.save(function (err) {
-                if (err) throw err;
-                return done(null, newUser);
-              });
-            }
-          });
-        });
-      }
-    )
-  );
+  passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: process.env.CALLBACK_URL,
+    state: true,
+  }, function (accessToken, refreshToken, profile, done) {
+    authenticateGoogle(profile).then(user => done(null, user), done);
+  }));
 };

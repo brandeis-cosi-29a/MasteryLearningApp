@@ -102,7 +102,7 @@ At [console.cloud.google.com](https://console.cloud.google.com/):
 - **The port must be 5500** unless you override it. `bin/www` defaults to 5500 (it reads
   `process.env.PORT` first), so if you set `PORT` to something else, register that port instead.
 - **Set `ADMIN_EMAIL` to the Google address you actually sign in with.** Admin rights are a
-  string comparison against the logged-in account's email; a mismatch is silent — the app works,
+  normalized email comparison against the logged-in account's email; a different address is silent — the app works,
   the admin screens simply never appear.
 - **Only the `profile` and `email` scopes are requested.** Both are non-sensitive, so Google
   requires no verification review and users see no "unverified app" warning. Adding a scope such
@@ -113,9 +113,22 @@ At [console.cloud.google.com](https://console.cloud.google.com/):
 
 Because password login does not exist, exercising anything multi-user — peer review, grading
 queues — means signing in with a different Google account (a second personal account works, and
-Chrome profiles or an incognito window make switching easy). There is deliberately no way to
+Chrome profiles or an incognito window make switching easy). Add each test account to a course
+roster first; personal Google accounts cannot provision themselves. There is deliberately no way to
 create a fake local user; a route that did this was removed because it allowed anyone on the
 internet to set a password on an existing account and take it over.
+
+### Sign-in admission
+
+Google must return a verified email address. Sign-in then requires either Google's hosted-domain
+claim `hd` to equal `brandeis.edu`, an existing user with a CourseMember or Instructor record,
+or an email matching `ADMIN_EMAIL`. An existing User row alone does not admit an outside account.
+Instructor approval and course permissions are checked separately after sign-in.
+
+Email comparison ignores case and surrounding whitespace. New users store normalized emails;
+existing users retain their IDs and course records. Duplicate email records resolve only when
+exactly one has the authenticated Google subject ID; unresolved duplicates need administrator
+assistance. See [OAuth admission and validation](oauth-hardening.md) for upgrade checks.
 
 ### For a production deployment
 

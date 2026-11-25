@@ -10,6 +10,7 @@ const createError = require("http-errors");
 const express = require("express");
 const path = require("path");
 const cookieParser = require("cookie-parser");
+const {normalizeEmail, findUserByEmail} = require('./config/emailIdentity');
 const logger = require("morgan"); // to log requests to the console
 const showdown  = require('showdown'); // to convert markdown to HTML
 const converter = new showdown.Converter({
@@ -433,8 +434,8 @@ app.get("/approveInstructor/:userId", isAdmin,
 app.post("/addInstructor", isAdmin,
   async (req, res, next) => {
     try {
-      const email = req.body.email;
-      let user = await User.findOne({googleemail:email});
+      const email = normalizeEmail(req.body.email);
+      let user = await findUserByEmail(User, email);
       if (!user) {
         // create a new user with the email as the googleemail
         const userJSON = {
@@ -819,9 +820,10 @@ app.post("/addStudents/:courseId", authorize, isOwner,
     const id = req.params.courseId;
     res.locals.courseInfo = await Course.findOne({_id: id}, "name coursePin ownerId");
 
-    let emails = req.body.emails.split("\n").map((x) => x.trim());
+    let emails = [...new Set(req.body.emails.split("\n").map(normalizeEmail).filter(Boolean))];
     for (let e of emails) {
-      let z = await User.findOneAndUpdate({googleemail: e}, {googleemail: e}, {upsert: true, new: true});
+      let z = await findUserByEmail(User, e);
+      if (!z) z = await new User({googleemail: e}).save();
       let registration = {
         studentId: z._id,
         courseId: id,
@@ -856,10 +858,10 @@ const updateCourseMembers = async (sectionDocuments) => {
       for (let sectionMember of sectionDocuments) {
         // update section data for existing students
         // and add new students to the CourseMember collection
-        const email = sectionMember.email;
+        const email = normalizeEmail(sectionMember.email);
         const courseId = sectionMember.courseId;
         course = await Course.findOne({_id:courseId});
-        let user = await User.findOne({googleemail:email});
+        let user = await findUserByEmail(User, email);
         if (!user) {
           // create a new user with the email as the googleemail
           const userJSON = {
@@ -914,7 +916,7 @@ const updateCourseMembers = async (sectionDocuments) => {
           {courseId:course._id,studentId:{$nin:userIds},role:"student"});
 
   } catch (e) {
-    console.error(`error updating course members ${e}`);
+    throw e;
   }
 
 }
@@ -974,8 +976,7 @@ app.post("/uploadRoster/:courseId",
         //res.json({ rowCount, dataFromRows });
         res.redirect(`/showRoster/${courseId}`);
       } catch (error) {
-        console.error(error);
-        //res.json({ error});
+        next(error);
       }
     });
 
@@ -3932,11 +3933,11 @@ app.post("/addTA/:courseId", authorize, isOwner,
   try {
     const course = await Course.findOne({_id: req.params.courseId});
     //let ta = await User.findOne({googleemail: req.body.email});
-    let email = req.body.email;
+    let email = normalizeEmail(req.body.email);
     let name = req.body.name;
     let section = req.body.section;
 
-    let user = await User.findOne({googleemail:email});
+    let user = await findUserByEmail(User, email);
     if (!user) {
       // create a new user with the email as the googleemail
       const userJSON = {
