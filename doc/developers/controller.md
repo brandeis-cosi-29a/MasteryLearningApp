@@ -9,21 +9,19 @@ Here is the preamble to the app which loads in many of the packages that are use
 const createError = require("http-errors");
 const express = require("express");
 const path = require("path");
-const cookieParser = require("cookie-parser");
 const logger = require("morgan"); // to log requests to the console
 const {renderMarkdown} = require('./config/markdown'); // Markdown parsing and HTML sanitization
 
 const multer = require("multer"); // to handle file uploads
 const csv = require('csv-parser')
-const streamifier = require("streamifier"); // to convert a buffer to a stream for file uploads
+const {Readable} = require("node:stream"); // to stream buffered CSV uploads
 
 const fsPromises = require('fs').promises; // to read files asynchronously
 
-const archiver = require('archiver'); // to create zip files of personalized exams
+const {zipSync, strToU8} = require('fflate'); // to create zip files of personalized exams
 
 const {S3Client, DeleteObjectCommand} = require('@aws-sdk/client-s3');
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
-const cors = require("cors")(); // to allow cross-origin requests
 const ejs = require('ejs'); // to render ejs templates
 
 

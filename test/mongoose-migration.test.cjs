@@ -17,6 +17,36 @@ const modelDirectory = path.join(__dirname, '../models');
 const realModels = Object.fromEntries(fs.readdirSync(modelDirectory).filter(file => file.endsWith('.js'))
   .map(file => [path.basename(file, '.js'), require(path.join(modelDirectory, file))]));
 
+test('Google-only users retain the email index and leave hidden legacy password values untouched on save', async t => {
+  const User = realModels.User;
+  const stored = {_id: id(900), googleemail: ' Legacy@Brandeis.edu ',
+    hash: 'synthetic-legacy-hash', salt: 'synthetic-legacy-salt', __v: 0};
+  t.mock.method(User.collection, 'findOne', async (filter, options) => {
+    assert.deepEqual(options.projection, {hash: 0, salt: 0});
+    const {hash, salt, ...visible} = stored;
+    return visible;
+  });
+  let updates = 0;
+  t.mock.method(User.collection, 'updateOne', async (filter, update) => {
+    updates++;
+    assert.equal(update.$unset, undefined);
+    assert.deepEqual(update.$set, {googleemail: 'legacy@brandeis.edu'});
+    Object.assign(stored, update.$set);
+    return {acknowledged: true, matchedCount: 1};
+  });
+  const user = await User.findById(stored._id);
+  assert.equal(user.toObject().hash, undefined);
+  assert.equal(user.toObject().salt, undefined);
+  user.googleemail = 'legacy@brandeis.edu';
+  await user.save();
+  assert.equal(updates, 1);
+  assert.equal(stored.hash, 'synthetic-legacy-hash');
+  assert.equal(stored.salt, 'synthetic-legacy-salt');
+  assert(User.schema.indexes().some(([keys, options]) => keys.googleemail === 1 && !options.unique));
+  assert.equal(User.register, undefined);
+  assert.equal(user.setPassword, undefined);
+});
+
 test('statistics and course totals execute real countDocuments queries with course filters', async t => {
   const f = fixture();
   const calls = [];
@@ -198,9 +228,12 @@ test('real MongoStore preserves OAuth state, login, legacy sessions, expiry and 
     collection.rows.set(sid, {_id: sid, expires, session: JSON.stringify({
       cookie: {originalMaxAge: 86400000, expires, httpOnly: true, path: '/'}, passport: {user: String(users[0]._id)},
     })});
-    const signature = require('cookie-signature').sign(sid, 'synthetic-test-secret');
+    const digest = require('node:crypto').createHmac('sha256', 'synthetic-test-secret')
+      .update(sid).digest('base64').replace(/=+$/, '');
+    const signature = sid + '.' + digest;
     const legacyCookie = 'connect.sid=' + encodeURIComponent('s:' + signature);
     assert.equal((await request('/who', {headers: {cookie: legacyCookie}})).status, 200);
+    assert.equal((await request('/who', {headers: {cookie: legacyCookie + 'tampered'}})).status, 401);
     collection.rows.get(sid).expires = new Date(0);
     assert.equal((await request('/who', {headers: {cookie: legacyCookie}})).status, 401);
   });

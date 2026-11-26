@@ -9,14 +9,13 @@
 const createError = require("http-errors");
 const express = require("express");
 const path = require("path");
-const cookieParser = require("cookie-parser");
 const {normalizeEmail, findUserByEmail} = require('./config/emailIdentity');
 const logger = require("morgan"); // to log requests to the console
 const {renderMarkdown} = require('./config/markdown');
 
 const multer = require("multer"); // to handle file uploads
 const csv = require('csv-parser')
-const streamifier = require("streamifier"); // to convert a buffer to a stream for file uploads
+const {Readable} = require("node:stream"); // to stream buffered CSV uploads
 
 const fsPromises = require('fs').promises; // to read files asynchronously
 
@@ -24,7 +23,6 @@ const {zipSync, strToU8} = require('fflate'); // to create zip files of personal
 
 const {S3Client, DeleteObjectCommand} = require('@aws-sdk/client-s3');
 const multerS3 = require("multer-s3"); // to handle file uploads to AWS S3
-const cors = require("cors")(); // to allow cross-origin requests
 const ejs = require('ejs'); // to render ejs templates
 
 
@@ -236,11 +234,7 @@ Setting up the MongoDB database connection
  *********************************************** */
 
 // AUTHENTICATION MODULES
-// TJH - why are these not defined with "CONST" declarations??
-// TJH - make sure we need all of these ...
-(session = require("express-session")), 
-(bodyParser = require("body-parser")), 
-(flash = require("connect-flash"));
+const session = require("express-session");
 // This allows the session variables to be stored in the database
 // so we can use multiple servers with the same session data
 const MongoStore = require("connect-mongo");
@@ -319,13 +313,12 @@ app.set("view engine", "ejs");
 app.disable('etag'); // get rid of 304 error?
 
 app.use(logger("dev"));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: false}));
+app.use(express.json());
+app.use(express.urlencoded({extended: false}));
 app.use((req, res, next) => {
   req.body ??= {};
   next();
 });
-app.use(cookieParser());
 // Legacy local answers must never bypass the authenticated image route,
 // including encoded and normalized paths accepted by the static server.
 app.use((req, res, next) => {
@@ -336,7 +329,6 @@ app.use((req, res, next) => {
   } catch (err) {next(createError(400));}
 });
 app.use(express.static(path.join(__dirname, "public")));
-app.use(cors);
 /*************************************************************************
      HERE ARE THE AUTHENTICATION ROUTES
 **************************************************************************/
@@ -351,9 +343,6 @@ app.use(session(
     store: MongoStore.create({clientPromise: mongoClientPromise}),
   })
 );
-
-// TJH - I don't think we are sending flash messages  
-app.use(flash());
 
 app.use('/fontawesome', express.static(path.join(__dirname, 'node_modules/@fortawesome/fontawesome-free')));
 
@@ -937,8 +926,7 @@ app.post("/uploadRoster/:courseId",
 
   const dataFromRows = [];
 
-  streamifier
-    .createReadStream(buffer)
+  Readable.from(buffer)
     .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
@@ -2191,8 +2179,7 @@ app.post("/uploadGrades/:courseId", authorize, hasStaffAccess,
 
   const dataFromRows = [];
 
-  streamifier
-    .createReadStream(buffer)
+  Readable.from(buffer)
     .pipe(csv())
     .on("data", (row) => {
       dataFromRows .push(row);
