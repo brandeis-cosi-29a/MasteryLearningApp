@@ -4980,9 +4980,12 @@ app.use(function (err, req, res, next) {
   // set locals, only providing error in development
   const status = err.status || 500;
   const development = req.app.get("env") === "development";
-  res.locals.message = status >= 500 && !development
-    ? "Something went wrong. Please try again." : err.message;
-  res.locals.error = development ? err : {};
+  const submissionError = status >= 400 && status < 500 && !!err.type;
+  res.locals.submissionError = submissionError;
+  res.locals.message = submissionError
+    ? (status === 413 ? "Your submission was too large." : "Your submission could not be read.")
+    : (status >= 500 && !development ? "Something went wrong. Please try again." : err.message);
+  res.locals.error = development && !submissionError ? err : {};
 
   // render the error page
   res.status(status);

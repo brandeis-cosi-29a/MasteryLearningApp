@@ -124,6 +124,10 @@ test('body-parser errors render their 400/413 pages before auth without writes',
       assert.equal(response.status, status);
       const html = await response.text();
       assert.match(html, /<h1 class="pb-2 border-bottom">Error -/);
+      assert.match(html, status === 413 ? /Your submission was too large\./ : /Your submission could not be read\./);
+      assert.match(html, /You may still be signed in/);
+      assert.match(html, /Back button and try again/);
+      assert.doesNotMatch(html, /href="\/(?:auth\/google|logout|profile)"|SyntaxError|entity\.(?:parse\.failed|too\.large)/);
       assert.doesNotMatch(html, /ReferenceError|loggedIn is not defined|at .*node_modules/);
     }
     assert.equal((await request('/about', {user: f.ids.owner})).status, 200);

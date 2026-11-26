@@ -148,8 +148,14 @@ MLA uses Express 5 and body-parser 2. JSON and URL-encoded forms are parsed once
 before authentication, with the existing default 100 KiB limit and
 `extended: false`. Multipart uploads still use multer and their separate limits.
 Parser errors render the application error page with their 400/413 status even
-when authentication has not run. Rejected promises returned by async handlers
-now reach the application error handler automatically.
+when authentication has not run. These pages explain that the submission was
+too large or unreadable and that the user may still be signed in, without
+showing login/logout navigation. Session initialization still follows parsing;
+moving it earlier is a separate follow-up. Rejected promises returned by async
+handlers now reach the application error handler automatically. The handler
+forwards errors if headers were already sent. Server errors show a generic
+message outside development; development retains the original message/stack.
+Set `NODE_ENV=production` on production deployments.
 
 Express 5's simple query parser handles MLA's flat selectors (`studentEmail`,
 `theStudentId`, `makeupId`, `csv`, `json`, `personal`). Bracket notation no longer
