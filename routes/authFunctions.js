@@ -27,8 +27,8 @@ const isLoggedIn = async (req, res, next) => {
     res.locals.loggedIn = false;
     if (req.isAuthenticated()) {
       res.locals.loggedIn = true;
-      let instructor = await Instructor.findOne({userId: req.user._id});
-      res.locals.isInstructor = (instructor && instructor.status == "active")
+      const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
+      res.locals.isInstructor = !!instructor;
       res.locals.isAdmin = isAdminEmail(req.user.googleemail);
       res.locals.admin_email = adminEmail;
       let courseTaMember 

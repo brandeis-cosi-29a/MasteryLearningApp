@@ -386,13 +386,9 @@ app.get("/removeInstructor/:userId", isAdmin,
   async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const instructor 
-        = await Instructor
-              .findOneAndUpdate(
-                {userId},
-                {$set:{status:"inactive"}},
-                {new:true});
-        res.redirect("/instructors");
+      // Approval is granted by any active row, including legacy duplicates.
+      await Instructor.updateMany({userId, status: 'active'}, {$set: {status: 'inactive'}});
+      res.redirect("/instructors");
     } catch (e) {
       next(e);
     }
@@ -430,8 +426,8 @@ app.post("/addInstructor", isAdmin,
         user = new User(userJSON);
         user = await user.save();
       }
-      const instructor = new Instructor({userId:user._id});
-      await instructor.save();
+      await Instructor.findOneAndUpdate(
+        {userId: user._id}, {$set: {status: 'active'}}, {upsert: true});
       res.redirect("/instructors");
     } catch (e) {
       next(e);

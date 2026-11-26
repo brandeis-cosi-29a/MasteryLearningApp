@@ -3,6 +3,76 @@ const assert = require('node:assert/strict');
 const {fixture, serve} = require('./helpers/app.cjs');
 const {id} = require('./helpers/models.cjs');
 
+test('administrator removal revokes every active approval for the selected owner', async () => {
+  const {app, db, ids} = fixture();
+  db.User.rows.find(user => String(user._id) === String(ids.outsider)).googleemail = 'admin@example.test';
+  db.Instructor.rows.unshift({_id: id(910), userId: ids.owner, status: 'inactive'});
+  db.Instructor.rows.push({_id: id(911), userId: ids.owner, status: 'active'},
+    {_id: id(912), userId: ids.ta, status: 'active'});
+  const memberships = JSON.stringify(db.CourseMember.rows);
+  const courses = JSON.stringify(db.Course.rows);
+  await serve(app, async request => {
+    const denied = await request(`/removeInstructor/${ids.owner}`, {user: ids.student});
+    assert.equal(denied.status, 403);
+    assert.equal(await db.Instructor.countDocuments({userId: ids.owner, status: 'active'}), 2);
+    for (const user of [ids.ta, ids.student]) {
+      assert.equal((await request(`/showCourse/${ids.course}`, {user})).status, 302);
+    }
+    const removed = await request(`/removeInstructor/${ids.owner}`, {user: ids.outsider});
+    assert.equal(removed.status, 302);
+    assert.equal(removed.headers.get('location'), '/instructors');
+    assert.equal(await db.Instructor.countDocuments({userId: ids.owner, status: 'active'}), 0);
+    assert.equal(await db.Instructor.countDocuments({userId: ids.ta, status: 'active'}), 1);
+    for (const user of [ids.owner, ids.ta, ids.student]) {
+      assert.equal((await request(`/showCourse/${ids.course}`, {user})).status, 403);
+    }
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.owner})).status, 403);
+    assert.equal((await request(`/showCourse/${ids.course}`, {user: ids.outsider})).status, 302);
+  });
+  assert.equal(JSON.stringify(db.CourseMember.rows), memberships);
+  assert.equal(JSON.stringify(db.Course.rows), courses);
+});
+
+test('navigation agrees with active approval even when an inactive duplicate appears first', async () => {
+  const {app, db, ids} = fixture();
+  db.Instructor.rows.unshift({_id: id(910), userId: ids.owner, status: 'inactive'});
+  await serve(app, async request => {
+    const home = await request('/mla_home/showCurrent', {user: ids.owner});
+    assert.equal(home.status, 200);
+    assert.equal((await home.json()).isInstructor, true);
+    assert.equal((await request('/createCourse', {user: ids.owner})).status, 200);
+    assert.equal((await request(`/showCourse/${ids.course}`, {user: ids.owner})).status, 302);
+    for (const row of db.Instructor.rows) row.status = 'inactive';
+    const revokedHome = await request('/mla_home/showCurrent', {user: ids.owner});
+    assert.equal((await revokedHome.json()).isInstructor, false);
+    assert.equal((await request('/createCourse', {user: ids.owner})).status, 403);
+    assert.equal((await request(`/showCourse/${ids.course}`, {user: ids.owner})).status, 403);
+  });
+});
+
+test('repeated administrator additions reuse an approval and reactivate a removed instructor', async () => {
+  const {app, db, ids} = fixture();
+  db.User.rows.find(user => String(user._id) === String(ids.outsider)).googleemail = 'admin@example.test';
+  await serve(app, async request => {
+    for (const email of ['owner@example.test', 'NEW.INSTRUCTOR@EXAMPLE.TEST']) {
+      const add = () => request('/addInstructor', {user: ids.outsider, method: 'POST',
+        headers: {'content-type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({email})});
+      assert.equal((await add()).status, 302);
+      const user = await db.User.findOne({googleemail: email.toLowerCase()});
+      const original = await db.Instructor.findOne({userId: user._id});
+      assert.equal((await add()).status, 302);
+      assert.equal(await db.Instructor.countDocuments({userId: user._id}), 1);
+      assert.equal((await request(`/removeInstructor/${user._id}`, {user: ids.outsider})).status, 302);
+      assert.equal((await add()).status, 302);
+      const restored = await db.Instructor.findOne({userId: user._id});
+      assert.equal(String(restored._id), String(original._id));
+      assert.equal(restored.status, 'active');
+      assert.equal(await db.Instructor.countDocuments({userId: user._id}), 1);
+    }
+  });
+});
+
 test('unapproved owners block existing grants, uploads, and shared material without changing records', async () => {
   for (const status of [undefined, 'requested', 'inactive', 'denied']) {
     const {app, db, ids, writes, uploads, imageReads} = fixture();
