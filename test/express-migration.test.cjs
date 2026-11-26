@@ -99,6 +99,16 @@ test('URL-encoded and JSON submissions preserve answer text and redirects', asyn
   }
 });
 
+test('unparsed request bodies preserve the legacy no-robots response without writes', async () => {
+  const f = fixture({realViews: true});
+  await serve(f.app, async request => {
+    const response = await request('/createNewCourse', {user: f.ids.owner, method: 'POST'});
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'no robots allowed!');
+  });
+  assert.deepEqual(f.writes, []);
+});
+
 test('body-parser errors render their 400/413 pages before auth without writes', async () => {
   const f = fixture({realViews: true});
   f.app.set('env', 'production');

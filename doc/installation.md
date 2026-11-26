@@ -154,9 +154,10 @@ now reach the application error handler automatically.
 Express 5's simple query parser handles MLA's flat selectors (`studentEmail`,
 `theStudentId`, `makeupId`, `csv`, `json`, `personal`). Bracket notation no longer
 creates nested query objects. Repeated keys remain arrays; identity selectors
-must still be single values. The app does not mutate `req.query`. An unparsed
-body is `undefined`; callers must send the form or JSON content type expected
-by the route. Existing browser forms and course content need no edits.
+must still be single values. The app does not mutate `req.query`. A shared guard
+normalizes unparsed bodies to `{}` before routes run, preserving legacy behavior
+for requests without a JSON or form content type. Existing browser forms and
+course content need no edits.
 
 After deployment, check Google login/logout, student answer text and photo
 uploads, staff image replacement, roster/grade CSV imports, exam ZIP downloads,

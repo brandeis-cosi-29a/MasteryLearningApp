@@ -321,6 +321,10 @@ app.disable('etag'); // get rid of 304 error?
 app.use(logger("dev"));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
+app.use((req, res, next) => {
+  req.body ??= {};
+  next();
+});
 app.use(cookieParser());
 // Legacy local answers must never bypass the authenticated image route,
 // including encoded and normalized paths accepted by the static server.
