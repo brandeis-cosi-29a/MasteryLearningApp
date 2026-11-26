@@ -20,9 +20,28 @@ as an appropriate sharing setting. Approval/revocation is read on each request,
 including requests from existing sessions. The check writes no memberships or
 student records.
 
+This applies equally to courses and banks owned by the administrator account.
+Other users still need that owner's active Instructor approval; administrator
+recovery access does not grant an approval exemption to those courses.
+
 Approving an owner permits existing course grants to be used again; it does not
 establish that those grants were legitimate. Course and membership review are
 therefore necessary alongside the code change.
+
+## Availability messages and home-page listings
+
+Signed-in outsiders receive the same generic 403 for existing courses whether
+they are available, locked, or missing owner approval. The application checks
+their existing course grant before revealing approval or lock details. Existing
+owners, TAs, and students receive the specific reason when access is unavailable.
+
+The home page retains unavailable courses in the user's own course lists,
+subject to the existing current/archive filters. It shows the course name and
+an unavailable reason instead of a course link or archive action. The teaching
+list remains visible to an actual owner whose instructor approval was revoked.
+Administrators see the participant-facing restriction alongside a working
+recovery link and retain their administrative actions. Availability is refreshed
+on each home-page request; course requests independently recheck current policy.
 
 ## Reversible course lock
 
@@ -74,8 +93,11 @@ records, and let the authorized institutional team decide any eventual cleanup.
    old owner simply to avoid disruption. Do not approve a departed or unknown
    account just to keep a bank available; transfer it to a verified custodian.
 5. Classify each course as keep, transfer, or quarantine. Confirm a working
-   administrator account before the cutover. Store exact before/after values and
-   backups of affected rows in the institution's approved private system.
+   administrator account before the cutover. If that account owns courses or
+   shared banks that other users need, verify its active Instructor approval
+   too: administrator recovery access does not exempt its courses from the
+   owner-approval requirement for other users. Store exact before/after values
+   and backups of affected rows in the institution's approved private system.
 
 The assistant has not run the administrative queries or updates below. They are
 templates for the authorized operator. Connect using the institution's approved
@@ -147,9 +169,12 @@ to follow their own approval and lock state.
 ### 3. Approve legitimate owners or transfer ownership
 
 Use the application's administrator-only instructor screen (`/instructors`) to
-approve a verified account. Verify the resulting approval records for that exact
-user, including duplicates. Review all courses and staff roles affected by the
-global approval before enabling it; keep suspect courses locked.
+approve a verified account. Repeated additions reuse an existing approval row
+and reactivate it instead of inserting another row. This does not consolidate
+legacy duplicates or enforce uniqueness for concurrent additions. Verify the
+resulting approval records for that exact user, including duplicates. Review all
+courses and staff roles affected by the global approval before enabling it;
+keep suspect courses locked.
 
 If ownership must change, keep the course locked. Confirm the new owner against
 institutional records and active instructor approvals, then update only the
@@ -200,10 +225,11 @@ one course grant. Staff can still access a former student's historical course
 submissions under the existing scoped-record rules.
 
 If an account's global instructor approval itself must be revoked, review all
-affected courses and use the administrator workflow. Verify that **no active
-approval row remains** for that exact user. If duplicate rows require a database
-correction, an authorized operator can use this exact-account update after
-recording the matched rows and confirming its scope:
+affected courses and use the administrator workflow. Remove Instructor makes
+all active approval rows for the selected user inactive, including duplicates.
+Verify that **no active approval row remains** for that exact user. If rows
+require a database correction, an authorized operator can use this exact-account
+update after recording the matched rows and confirming its scope:
 
 ```javascript
 db.instructors.updateMany(
@@ -270,6 +296,16 @@ the tests. Use a synthetic staging database and private test bucket to confirm:
 - Approved owners and reviewed memberships retain their ordinary workflows.
 - A single-course lock leaves the same instructor's other courses available.
 - Administrators retain recovery, and foreign-object mismatches remain denied.
+- Remove Instructor revokes every active approval row for the selected user,
+  including duplicates, and the owner's courses reject the next non-admin
+  request. Navigation agrees with any remaining active approval when duplicate
+  inactive rows exist.
+- Outsiders receive the same generic 403 for available, locked, and unapproved
+  courses; participants see the specific unavailability reason. Home pages keep
+  unavailable courses visible with reasons, including for unapproved owners,
+  while administrator recovery links remain available.
+- Administrator-owned courses and source banks require active owner approval
+  for other users and remain subject to course locks.
 - The Discrete Math Problem Bank has an approved custodian, is unlocked, and has
   the intended sharing setting. Its search/preview/import workflow still works.
 - Locking a source bank prevents new source access/imports; it does not delete

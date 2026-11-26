@@ -300,6 +300,7 @@ functions available in res.locals.
 */
 const {isLoggedIn, hasCourseAccess, hasStaffAccess, isOwner, isInstructor, isAdmin, authorize} = require('./routes/authFunctions.js');
 const {MATERIAL_FIELDS, materialCourseFilter, requireMaterialSource, copyProblemMaterial} = require('./routes/materialAccess');
+const {courseAccessReasons} = require('./routes/courseOwnerAccess');
 const {validateBodyScope, requireSkillOwner} = require('./routes/courseScope');
 const {sameId} = require('./routes/materialAccess');
 const {canBrowseAnswers, requireAnswerRead, requireReviewWrite, requirePeerAssignment, requireRegradeOwner, requireReviewRead, answerContent} = require('./routes/recordAccess');
@@ -572,6 +573,7 @@ app.get("/mla_home/:show", isLoggedIn,
     user,
     title,
     coursesOwned,coursesTAing,coursesTaken,
+    courseAccessReasons: await courseAccessReasons([...coursesOwned, ...coursesTAing, ...coursesTaken]),
     show,
   };
 

@@ -62,7 +62,6 @@ const isLoggedIn = async (req, res, next) => {
       const course = await Course.findOne({_id: req.params.courseId});
       if (!course) throw createError(404);
       const isAdministrator = isAdminEmail(req.user.googleemail);
-      await requireApprovedCourseOwner(course, isAdministrator);
       const member = await CourseMember.findOne({studentId: req.user._id, courseId: course._id});
       const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
       res.locals.courseInfo = res.locals.course = course;
@@ -77,6 +76,8 @@ const isLoggedIn = async (req, res, next) => {
       res.locals.isStaff = res.locals.isTA || res.locals.isOwner;
       res.locals.hasCourseAccess = res.locals.isEnrolled || res.locals.isStaff;
       if (!res.locals.hasCourseAccess) throw createError(403);
+      // Only existing course participants may learn its approval/lock state.
+      await requireApprovedCourseOwner(course, isAdministrator);
       res.set('Cache-Control', 'private, no-store');
       await validateParams(req, res);
       await validateBody(req);

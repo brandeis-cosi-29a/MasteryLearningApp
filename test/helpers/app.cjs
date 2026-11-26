@@ -54,7 +54,8 @@ function fixture(options = {}) {
     'connect-mongo': {create: () => new session.MemoryStore()},
     './routes/authRouter': authRouter, './routes/similarity': similarity,
     './routes/updatesARCHIVED.js': {}, './routes/authFunctions.js': auth,
-    './routes/materialAccess': material, './routes/courseScope': scope, './routes/recordAccess': records, './routes/answerImages': imageRouter,
+    './routes/materialAccess': material, './routes/courseOwnerAccess': owners,
+    './routes/courseScope': scope, './routes/recordAccess': records, './routes/answerImages': imageRouter,
     ...options.substitutes,
   }, {process: {exit: options.exit, env: {SESSION_SECRET: 'synthetic-test-secret', UPLOAD_TO: 'AWS', AWS_BUCKET_NAME: 'test-bucket', AWS_REGION: 'us-east-1', NODE_ENV: 'test', ...options.env}},
     console: {log() {}, error(...args) {errors.push(args.join(' '));}, dir() {}, warn() {}}});

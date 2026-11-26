@@ -73,6 +73,105 @@ test('repeated administrator additions reuse an approval and reactivate a remove
   });
 });
 
+test('outsiders receive the same generic denial for normal, locked, and unapproved courses', async () => {
+  const {app, db, ids, writes, uploads, imageReads} = fixture({realViews: true});
+  const replies = [];
+  await serve(app, async request => {
+    for (const state of ['normal', 'locked', 'unapproved']) {
+      db.Course.rows[0].accessDisabled = state === 'locked';
+      db.Instructor.rows[0].status = state === 'unapproved' ? 'inactive' : 'active';
+      const outsider = await request(`/showCourse/${ids.course}`, {user: ids.outsider});
+      assert.equal(outsider.status, 403);
+      replies.push(await outsider.text());
+      if (state !== 'normal') {
+        for (const user of [ids.owner, ids.ta, ids.student]) {
+          const member = await request(`/showCourse/${ids.course}`, {user});
+          assert.equal(member.status, 403);
+          assert.match(await member.text(), state === 'locked' ? /Course access is disabled/ : /requires instructor approval/);
+        }
+      }
+    }
+  });
+  assert.equal(replies[0], replies[1]);
+  assert.equal(replies[0], replies[2]);
+  assert.doesNotMatch(replies[0], /Course access is disabled|requires instructor approval/);
+  assert.equal(writes.length, 0);
+  assert.equal(uploads.length, 0);
+  assert.equal(imageReads.length, 0);
+});
+
+test('home pages retain unavailable courses with reasons for owners, TAs, and students', async () => {
+  for (const state of ['locked', 'unapproved']) {
+    const {app, db, ids, writes} = fixture({realViews: true});
+    db.Course.rows[0].name = 'Unavailable synthetic course';
+    db.Course.rows[1].name = 'Available synthetic course';
+    for (const course of db.Course.rows) course.stopDate = new Date('2099-01-01');
+    db.Course.rows[0].accessDisabled = state === 'locked';
+    if (state === 'unapproved') {
+      db.Course.rows[1].ownerId = ids.outsider;
+      db.Instructor.rows[0].status = 'inactive';
+      db.Instructor.rows.push({_id: id(920), userId: ids.outsider, status: 'active'});
+    }
+    // A separate available enrollment ensures its link survives in each list.
+    for (const user of [ids.owner, ids.ta, ids.student]) {
+      db.CourseMember.rows.push({_id: id(930 + db.CourseMember.rows.length),
+        courseId: ids.otherCourse, studentId: user, role: 'student'});
+    }
+    await serve(app, async request => {
+      for (const user of [ids.owner, ids.ta, ids.student]) {
+        for (const show of ['showCurrent', 'showAll']) {
+          const home = await request(`/mla_home/${show}`, {user});
+          assert.equal(home.status, 200);
+          const html = await home.text();
+          assert.match(html, /Unavailable synthetic course/);
+          assert.match(html, state === 'locked' ? /Unavailable: Course access is disabled/ : /Unavailable: This course requires instructor approval/);
+          assert(!html.includes(`href="/showCourse/${ids.course}"`));
+          assert(!html.includes(`href="/setActive/${ids.course}/`));
+          assert(html.includes(`href="/showCourse/${ids.otherCourse}"`));
+        }
+      }
+      if (state === 'unapproved') {
+        db.Instructor.rows[0].status = 'active';
+      } else {
+        db.Course.rows[0].accessDisabled = false;
+      }
+      const restored = await request('/mla_home/showCurrent', {user: ids.owner});
+      const html = await restored.text();
+      assert(html.includes(`href="/showCourse/${ids.course}"`));
+      assert.doesNotMatch(html, /Unavailable:/);
+    });
+    assert.equal(writes.length, 0);
+  }
+});
+
+test('administrator-owned courses and banks still require approval for other users', async () => {
+  const {app, db, ids, writes} = fixture({realViews: true});
+  db.User.rows.find(user => String(user._id) === String(ids.outsider)).googleemail = 'admin@example.test';
+  db.Course.rows[1].ownerId = ids.outsider;
+  db.Course.rows[1].name = 'Administrator bank';
+  db.Course.rows[1].guestAccess = 'instructors';
+  db.Course.rows[1].stopDate = new Date('2099-01-01');
+  db.CourseMember.rows.push({_id: id(940), courseId: ids.otherCourse, studentId: ids.student, role: 'student'});
+  await serve(app, async request => {
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.student})).status, 403);
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.outsider})).status, 302);
+    assert.equal((await request(`/previewLibraryProblem/${ids.course}/${ids.pset}/${ids.otherProblem}`, {user: ids.owner})).status, 404);
+    const home = await request('/mla_home/showCurrent', {user: ids.outsider});
+    assert.equal(home.status, 200);
+    const html = await home.text();
+    assert.match(html, /Unavailable to participants: This course requires instructor approval/);
+    assert(html.includes(`href="/showCourse/${ids.otherCourse}"`), 'administrator recovery link remains available');
+    db.Instructor.rows.push({_id: id(941), userId: ids.outsider, status: 'active'});
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.student})).status, 302);
+    assert.equal((await request(`/previewLibraryProblem/${ids.course}/${ids.pset}/${ids.otherProblem}`, {user: ids.owner})).status, 200);
+    db.Course.rows[1].accessDisabled = true;
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.student})).status, 403);
+    assert.equal((await request(`/showCourse/${ids.otherCourse}`, {user: ids.outsider})).status, 302);
+    assert.equal((await request(`/previewLibraryProblem/${ids.course}/${ids.pset}/${ids.otherProblem}`, {user: ids.owner})).status, 404);
+  });
+  assert.equal(writes.length, 0);
+});
+
 test('unapproved owners block existing grants, uploads, and shared material without changing records', async () => {
   for (const status of [undefined, 'requested', 'inactive', 'denied']) {
     const {app, db, ids, writes, uploads, imageReads} = fixture();

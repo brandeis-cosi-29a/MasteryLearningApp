@@ -52,9 +52,7 @@
           
         %>
       <li>
-        <a href="/showCourse/<%= coursesTaken[i]._id %>">
-          <%= coursesTaken[i].name %>
-        </a>
+        <%- include('homeCourseLink', {course: coursesTaken[i], linkClass: ''}) -%>
       </li>
       <% } %>
     </ul>
@@ -82,9 +80,7 @@
            || coursesTAing[i].stopDate < now)) {
              continue;} %>
       <li>
-        <a class="link-info" href="/showCourse/<%= coursesTAing[i]._id %>">
-          <%= coursesTAing[i].name %>
-        </a>
+        <%- include('homeCourseLink', {course: coursesTAing[i], linkClass: 'link-info'}) -%>
       </li>
       <% } %>
     </ul>
@@ -92,7 +88,7 @@
 
   <% } %> 
 
-  <% if (isInstructor || isAdmin) { %> 
+  <% if (coursesOwned.length || isInstructor || isAdmin) { %>
   <div class="card bg-danger p-2">
     <div class="card-header">Courses I'm Teaching</div>
 
@@ -104,9 +100,8 @@
            || (coursesOwned[i].stopDate < now))) {
              continue;}%>
       <li>
-        <a class="link-info" href="/showCourse/<%= coursesOwned[i]._id %>">
-          <%= coursesOwned[i].name %>
-        </a>
+        <%- include('homeCourseLink', {course: coursesOwned[i], linkClass: 'link-info'}) -%>
+        <% if (!courseAccessReasons[String(coursesOwned[i]._id)] || isAdmin) { %>
           <% if (coursesOwned[i].active) { %>
             <% if (true || show=='currentOnly') { %>
             <a href="/setActive/<%= coursesOwned[i]._id %>/false">
@@ -118,6 +113,7 @@
             <i class='fas fa-plus text-light' style='font-size:16px'></i>
           </a>
           <% } %>
+        <% } %>
 
       </li>
       <% } %>
@@ -126,11 +122,13 @@
     <div class="row p-2">
       
         
+          <% if (isInstructor) { %>
           <div class="col">
             <a href="/createCourse" class="btn btn-sm btn-info">
               Create a new course
             </a>
           </div>
+          <% } %>
        
        
         <% if (isAdmin) { %>
@@ -142,9 +140,8 @@
         <% } %>
        
     </div>
-    <% } %>
-    
   </div>
+  <% } %>
 </div>
 
 
