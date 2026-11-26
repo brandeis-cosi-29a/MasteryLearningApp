@@ -1,0 +1,11 @@
+<% const accessReason = courseAccessReasons[String(course._id)]; %>
+<% if (accessReason && !isAdmin) { %>
+  <span><%= course.name %></span>
+<% } else { %>
+  <a class="<%= linkClass %>" href="/showCourse/<%= course._id %>"><%= course.name %></a>
+<% } %>
+<% if (accessReason) { %>
+  <span class="d-block small text-bg-light rounded px-1">
+    <%= isAdmin ? 'Unavailable to participants: ' : 'Unavailable: ' %><%= accessReason %>
+  </span>
+<% } %>

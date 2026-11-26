@@ -1,5 +1,8 @@
 # Course authorization and private answer images
 
+The separately prepared [semester-end enforcement](semester-end-enforcement.md)
+replaces the owner-approval deferral below only when that follow-up is deployed.
+
 This change preserves separate problem-bank courses and legitimate Google
 accounts outside the university domain. Authentication alone grants no course
 creation or student-record permissions.

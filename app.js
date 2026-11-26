@@ -300,6 +300,7 @@ functions available in res.locals.
 */
 const {isLoggedIn, hasCourseAccess, hasStaffAccess, isOwner, isInstructor, isAdmin, authorize} = require('./routes/authFunctions.js');
 const {MATERIAL_FIELDS, materialCourseFilter, requireMaterialSource, copyProblemMaterial} = require('./routes/materialAccess');
+const {courseAccessReasons} = require('./routes/courseOwnerAccess');
 const {validateBodyScope, requireSkillOwner} = require('./routes/courseScope');
 const {sameId} = require('./routes/materialAccess');
 const {canBrowseAnswers, requireAnswerRead, requireReviewWrite, requirePeerAssignment, requireRegradeOwner, requireReviewRead, answerContent} = require('./routes/recordAccess');
@@ -386,13 +387,9 @@ app.get("/removeInstructor/:userId", isAdmin,
   async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const instructor 
-        = await Instructor
-              .findOneAndUpdate(
-                {userId},
-                {$set:{status:"inactive"}},
-                {new:true});
-        res.redirect("/instructors");
+      // Approval is granted by any active row, including legacy duplicates.
+      await Instructor.updateMany({userId, status: 'active'}, {$set: {status: 'inactive'}});
+      res.redirect("/instructors");
     } catch (e) {
       next(e);
     }
@@ -430,8 +427,8 @@ app.post("/addInstructor", isAdmin,
         user = new User(userJSON);
         user = await user.save();
       }
-      const instructor = new Instructor({userId:user._id});
-      await instructor.save();
+      await Instructor.findOneAndUpdate(
+        {userId: user._id}, {$set: {status: 'active'}}, {upsert: true});
       res.redirect("/instructors");
     } catch (e) {
       next(e);
@@ -576,6 +573,7 @@ app.get("/mla_home/:show", isLoggedIn,
     user,
     title,
     coursesOwned,coursesTAing,coursesTaken,
+    courseAccessReasons: await courseAccessReasons([...coursesOwned, ...coursesTAing, ...coursesTaken]),
     show,
   };
 
@@ -1549,7 +1547,7 @@ app.get("/importSkills/:courseId", authorize, isOwner, isInstructor,
 
     // for now we will let the user see all of the courses..
     // this is not scalable though!!
-    res.locals.courses = await Course.find(materialCourseFilter(req.user._id)).select("name ownerId guestAccess").sort({name: 1});
+    res.locals.courses = await Course.find(await materialCourseFilter(req.user._id)).select("name ownerId guestAccess").sort({name: 1});
 
 
     res.render("importSkills");
@@ -3243,7 +3241,7 @@ app.get('/showProblemsBySkill/:courseId/:psetId/:skillId', authorize, isOwner, i
     // don't show the problems that have already been used in this course
 
     // Only search teaching material in courses this approved instructor may use.
-    const sourceCourses = await Course.find(materialCourseFilter(req.user._id)).select('_id');
+    const sourceCourses = await Course.find(await materialCourseFilter(req.user._id)).select('_id');
     const sourceCourseIds = sourceCourses.map(course => course._id);
     const problems =
         await Problem

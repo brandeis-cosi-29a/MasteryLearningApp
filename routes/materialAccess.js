@@ -2,16 +2,18 @@ const Course = require('../models/Course');
 const Problem = require('../models/Problem');
 const ProblemSet = require('../models/ProblemSet');
 const createError = require('http-errors');
+const {approvedOwnerIds} = require('./courseOwnerAccess');
 
 const validId = value => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 const sameId = (a, b) => a != null && b != null && String(a._id || a) === String(b._id || b);
 const MATERIAL_FIELDS = 'courseId psetId description problemText mimeType answerMimeType rubric skills points parentProblemId variant visible allowAnswers submitable answerable peerReviewable';
 
 // Sharing authorizes teaching-material reads, never student-record access.
-const materialCourseFilter = userId => ({$or: [
-  {ownerId: userId},
-  {guestAccess: {$in: ['instructors', 'all']}},
-]});
+const materialCourseFilter = async userId => ({
+  accessDisabled: {$ne: true},
+  ownerId: {$in: await approvedOwnerIds()},
+  $or: [{ownerId: userId}, {guestAccess: {$in: ['instructors', 'all']}}],
+});
 
 async function requireMaterialSource(req, res, next) {
   try {
@@ -23,7 +25,7 @@ async function requireMaterialSource(req, res, next) {
       sourceCourseId = String(req.sourceProblem.courseId);
     }
     if (!validId(sourceCourseId)) throw createError(404);
-    const source = await Course.findOne({_id: sourceCourseId, ...materialCourseFilter(req.user._id)});
+    const source = await Course.findOne({_id: sourceCourseId, ...await materialCourseFilter(req.user._id)});
     if (!source) throw createError(404);
     if (req.sourceProblem && !await ProblemSet.findOne({_id: req.sourceProblem.psetId, courseId: source._id})) {
       throw createError(404);

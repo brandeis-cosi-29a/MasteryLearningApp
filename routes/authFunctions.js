@@ -19,6 +19,7 @@ const {validateParams, validateBody} = require('./courseScope');
 const {normalizeEmail} = require('../config/emailIdentity');
 const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL);
 const isAdminEmail = email => !!adminEmail && normalizeEmail(email) === adminEmail;
+const {requireApprovedCourseOwner} = require('./courseOwnerAccess');
 
 
 // route middleware to make sure a user is logged in
@@ -26,8 +27,8 @@ const isLoggedIn = async (req, res, next) => {
     res.locals.loggedIn = false;
     if (req.isAuthenticated()) {
       res.locals.loggedIn = true;
-      let instructor = await Instructor.findOne({userId: req.user._id});
-      res.locals.isInstructor = (instructor && instructor.status == "active")
+      const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
+      res.locals.isInstructor = !!instructor;
       res.locals.isAdmin = isAdminEmail(req.user.googleemail);
       res.locals.admin_email = adminEmail;
       let courseTaMember 
@@ -60,11 +61,12 @@ const isLoggedIn = async (req, res, next) => {
       if (!validId(req.params.courseId)) throw createError(404);
       const course = await Course.findOne({_id: req.params.courseId});
       if (!course) throw createError(404);
+      const isAdministrator = isAdminEmail(req.user.googleemail);
       const member = await CourseMember.findOne({studentId: req.user._id, courseId: course._id});
       const instructor = await Instructor.findOne({userId: req.user._id, status: 'active'});
       res.locals.courseInfo = res.locals.course = course;
       res.locals.isInstructor = !!instructor;
-      res.locals.isAdmin = isAdminEmail(req.user.googleemail);
+      res.locals.isAdmin = isAdministrator;
       res.locals.isTA = member?.role === 'ta';
       res.locals.isEnrolled = member?.role === 'student';
       // Preserve existing owner/admin and approved-instructor-as-TA permissions,
@@ -74,6 +76,8 @@ const isLoggedIn = async (req, res, next) => {
       res.locals.isStaff = res.locals.isTA || res.locals.isOwner;
       res.locals.hasCourseAccess = res.locals.isEnrolled || res.locals.isStaff;
       if (!res.locals.hasCourseAccess) throw createError(403);
+      // Only existing course participants may learn its approval/lock state.
+      await requireApprovedCourseOwner(course, isAdministrator);
       res.set('Cache-Control', 'private, no-store');
       await validateParams(req, res);
       await validateBody(req);

@@ -11,6 +11,8 @@ var courseSchema = Schema( {
   startDate: Date,
   stopDate: Date,
   active: {type:Boolean, default:true}, // set to false to archive the course
+  // Administrative access lock, independent of the archive/display setting.
+  accessDisabled: {type:Boolean, default:false},
   guestAccess: // who can see the course without joining it
     { type:String,
       enum: ['none','instructors','all'],

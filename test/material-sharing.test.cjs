@@ -5,8 +5,11 @@ const {models, id} = require('./helpers/models.cjs');
 
 test('source sharing permits material imports without copying student review state', async () => {
   const {db} = models();
-  const access = load('routes/materialAccess.js', Object.fromEntries(Object.entries(db).map(([name, model]) => [`../models/${name}`, model])));
+  const substitutes = Object.fromEntries(Object.entries(db).map(([name, model]) => [`../models/${name}`, model]));
+  const owners = load('routes/courseOwnerAccess.js', substitutes);
+  const access = load('routes/materialAccess.js', {...substitutes, './courseOwnerAccess': owners});
   const owner = id(1), other = id(2), source = id(3), pset = id(4), problem = id(5);
+  db.Instructor.rows.push({userId: owner, status: 'active'}, {userId: other, status: 'active'});
   db.Course.rows.push({_id: source, ownerId: other, guestAccess: 'none'});
   db.ProblemSet.rows.push({_id: pset, courseId: source});
   db.Problem.rows.push({_id: problem, courseId: source, psetId: pset, problemText: 'Bank question', rubric: 'Bank rubric', visible: true, peerReviewable: false, pendingReviews: [{answerId: id(9), reviewerId: id(10)}]});

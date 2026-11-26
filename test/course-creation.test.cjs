@@ -14,6 +14,7 @@ test('direct course creation requires active instructor approval before writes',
     '../models/CourseMember': {findOne: async () => null},
     '../models/Course': {},
     './courseScope': {},
+    './courseOwnerAccess': {},
   });
   class Course {
     constructor(data) {Object.assign(this, data); this._id = 'new-course';}
