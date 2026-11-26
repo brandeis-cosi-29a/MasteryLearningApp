@@ -43,7 +43,7 @@ const OWN = {courseId: 'course', psetId: 'pset', probId: 'problem', skillId: 'sk
   sourceProblemId: 'otherProblem', otherCourseId: 'otherCourse'};
 
 function mountedRoutes(app) {
-  return app._router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
+  return app.router.stack.flatMap(layer => layer.route ? [layer.route] : layer.handle.stack?.filter(x => x.route).map(x => x.route) || []);
 }
 
 function urlFor(path, ids) {

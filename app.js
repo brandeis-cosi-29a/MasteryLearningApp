@@ -319,8 +319,12 @@ app.set("view engine", "ejs");
 app.disable('etag'); // get rid of 304 error?
 
 app.use(logger("dev"));
-app.use(express.json());
-app.use(express.urlencoded({extended: false}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: false}));
+app.use((req, res, next) => {
+  req.body ??= {};
+  next();
+});
 app.use(cookieParser());
 // Legacy local answers must never bypass the authenticated image route,
 // including encoded and normalized paths accepted by the static server.
@@ -353,8 +357,6 @@ app.use(flash());
 
 app.use('/fontawesome', express.static(path.join(__dirname, 'node_modules/@fortawesome/fontawesome-free')));
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: false}));
 app.use(auth);
 app.use(similarity);
 app.use(require('./routes/answerImages')({s3, env: process.env, localRoot: localAnswerRoot}));
@@ -4974,13 +4976,21 @@ app.use(function (req, res, next) {
 
 // error handler
 app.use(function (err, req, res, next) {
+  if (res.headersSent) return next(err);
   // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get("env") === "development" ? err : {};
+  const status = err.status || 500;
+  const development = req.app.get("env") === "development";
+  const submissionError = status >= 400 && status < 500 && !!err.type;
+  res.locals.submissionError = submissionError;
+  res.locals.message = submissionError
+    ? (status === 413 ? "Your submission was too large." : "Your submission could not be read.")
+    : (status >= 500 && !development ? "Something went wrong. Please try again." : err.message);
+  res.locals.error = development && !submissionError ? err : {};
 
   // render the error page
-  res.status(err.status || 500);
+  res.status(status);
   res.locals.user= req.user||{}
+  res.locals.loggedIn = !!req.user; // Parser errors can arrive before authentication middleware.
   res.render("error");
 });
 
