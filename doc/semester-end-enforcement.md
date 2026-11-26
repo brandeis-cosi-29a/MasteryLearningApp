@@ -1,7 +1,8 @@
 # Semester-end course enforcement
 
-This is a separate, future change based on the course/record authorization work
-in PR #10. It is not part of that PR and must not be enabled for running courses
+This separate change extends the course/record authorization work in PR #10
+and is stacked on PR #18 (`chore/unused-dependencies`). It must land after the
+dependency stack in PRs #14–#18 and must not be enabled for running courses
 before the agreed semester-end review. Preparing these commits does not inspect
 or modify production records, approvals, credentials, or hosting settings.
 
@@ -85,8 +86,8 @@ contents, OAuth tokens, or account credentials are needed for these examples.
 
 ## Administrative steps and exact-target templates
 
-Use a maintenance window for the cutover. Before this follow-up is deployed,
-PR #10's application **ignores** `accessDisabled`: setting the field in advance
+Use a maintenance window for the cutover. Application versions without this
+follow-up **ignore** `accessDisabled`: setting the field in advance
 does not itself protect a course. If records need to be isolated during the
 preparation window, use the institution's existing maintenance/access controls
 until this code is serving. No such controls are changed by preparing this work.
@@ -241,16 +242,23 @@ Have the authorized institutional team assess those records privately.
 
 ## Prepare the future release and verify the cutover
 
-The local branch is `fix/semester-end-course-enforcement`, based on PR #10's head
-`c8ec614a423f9ab8f84116ab587bea4a61dd3434`. It must be reviewed separately and
-deployed only at the agreed cutover; nothing schedules activation automatically.
-If PR #10 is squash-merged, first verify that `origin/main` contains its changes,
-then rebase **only this follow-up** onto the actual release base:
+The branch is `fix/semester-end-course-enforcement`, based on PR #18's head
+`2006e0b7f00b282d154a9efa2313d4f6865e9991`. Review it separately and land it
+only after PRs #14–#18, including their required code, browser, and login checks.
+Merge and deploy only with the instructor's explicit go-ahead at the agreed
+semester-end cutover, after grades have been submitted for every affected
+course and the administrative review above is complete. Deploying this code
+enables the policy immediately; there is no automatic date or scheduled switch.
+
+After the dependency stack is squash-merged, verify that `origin/main` contains
+all of its changes, then rebase **only this follow-up** onto the actual release
+base. The command below uses the current PR #18 head as the old base; recheck
+that boundary if a parent branch has changed or this branch has been rebased:
 
 ```sh
 git fetch origin
 git switch fix/semester-end-course-enforcement
-git rebase --onto origin/main c8ec614a423f9ab8f84116ab587bea4a61dd3434
+git rebase --onto origin/main 2006e0b7f00b282d154a9efa2313d4f6865e9991
 fnm exec --using 24.19.0 npm test
 ```
 
@@ -280,7 +288,7 @@ Prefer correcting a verified owner's approval or ownership while its course is
 locked. Restore only reviewed legitimate memberships from the private change
 record. Keep uncertain courses locked rather than approving unknown accounts.
 
-Reverting this follow-up to PR #10 also removes enforcement of `accessDisabled`
+Reverting this follow-up also removes enforcement of `accessDisabled`
 and the approved-owner rule; old locks would no longer protect those courses.
 If a code rollback is necessary, arrange separate containment first. Retain
 PR #10's object-level authorization and S3 privacy protections; do not roll back
