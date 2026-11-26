@@ -2,6 +2,27 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {fixture, serve} = require('./helpers/app.cjs');
 
+test('errors after headers are sent reach the next handler without writing another response', async () => {
+  const {app} = fixture();
+  const failure = new Error('Synthetic failure after response');
+  let resolveForwarded;
+  const forwarded = new Promise(resolve => {resolveForwarded = resolve;});
+  app.get('/synthetic-late-error', async (req, res) => {
+    res.send('Response already sent');
+    throw failure;
+  });
+  // Put only this synthetic route before the production middleware, retaining
+  // the application's real error handler and Express's async rejection path.
+  app.router.stack.unshift(app.router.stack.pop());
+  app.use((error, req, res, next) => {resolveForwarded(error);});
+  await serve(app, async request => {
+    const response = await request('/synthetic-late-error');
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'Response already sent');
+    assert.equal(await forwarded, failure);
+  });
+});
+
 test('rejected async model calls reach the application error page and leave the server usable', async () => {
   const f = fixture({realViews: true});
   f.app.set('env', 'production');
