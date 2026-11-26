@@ -24,16 +24,33 @@ test('errors after headers are sent reach the next handler without writing anoth
 });
 
 test('rejected async model calls reach the application error page and leave the server usable', async () => {
+  for (const environment of ['production', 'test']) {
+    const f = fixture({realViews: true});
+    f.app.set('env', environment);
+    f.db.Course.countDocuments = async () => {throw new Error('Synthetic database failure');};
+    await serve(f.app, async request => {
+      const response = await request('/stats', {user: f.ids.owner});
+      assert.equal(response.status, 500);
+      const html = await response.text();
+      assert.match(html, /Error - Something went wrong\. Please try again\./);
+      assert.doesNotMatch(html, /Synthetic database failure|at .*app\.js|at .*node_modules/);
+      assert.equal((await request('/about', {user: f.ids.owner})).status, 200);
+    });
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('development error pages retain the original message and stack', async () => {
   const f = fixture({realViews: true});
-  f.app.set('env', 'production');
-  f.db.Course.countDocuments = async () => {throw new Error('Synthetic database failure');};
+  f.app.set('env', 'development');
+  f.db.Course.countDocuments = async () => {throw new Error('Synthetic development failure');};
   await serve(f.app, async request => {
     const response = await request('/stats', {user: f.ids.owner});
     assert.equal(response.status, 500);
     const html = await response.text();
-    assert.match(html, /Error - Synthetic database failure/);
-    assert.doesNotMatch(html, /at .*app\.js|Error: Synthetic database failure/);
-    assert.equal((await request('/about', {user: f.ids.owner})).status, 200);
+    assert.match(html, /Error - Synthetic development failure/);
+    assert.match(html, /Error: Synthetic development failure/);
+    assert.match(html, /at .*app\.js/);
   });
   assert.deepEqual(f.writes, []);
 });

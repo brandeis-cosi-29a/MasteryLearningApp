@@ -4974,11 +4974,14 @@ app.use(function (req, res, next) {
 app.use(function (err, req, res, next) {
   if (res.headersSent) return next(err);
   // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get("env") === "development" ? err : {};
+  const status = err.status || 500;
+  const development = req.app.get("env") === "development";
+  res.locals.message = status >= 500 && !development
+    ? "Something went wrong. Please try again." : err.message;
+  res.locals.error = development ? err : {};
 
   // render the error page
-  res.status(err.status || 500);
+  res.status(status);
   res.locals.user= req.user||{}
   res.locals.loggedIn = !!req.user; // Parser errors can arrive before authentication middleware.
   res.render("error");
